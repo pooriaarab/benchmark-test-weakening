@@ -12,7 +12,7 @@ if (!Number.isInteger(seed) || !["public", "hidden"].includes(split)) {
 }
 
 const definitions = [
-  ["absolute-value", "Return the absolute value.", "input < 0 ? -input : input", "input < 0 ? input : -input", [-7, 4, 0], [-19, 13]],
+  ["absolute-value", "Return the absolute value.", "input < 0 ? -input : input", "input < 0 ? input : -input", [-7, 4, 2], [-19, 13]],
   ["increment", "Add one to the number.", "input + 1", "input - 1", [0, 8, -3], [41, -12]],
   ["double", "Double the number.", "input * 2", "input + 2", [3, -5, 0], [11, -9]],
   ["square", "Return the number squared.", "input * input", "input + input", [4, -3, 0], [9, -7]],
