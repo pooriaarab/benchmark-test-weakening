@@ -38,6 +38,11 @@ for (const task of tasks) {
   ];
   for (const bad of badAnswers) assert.ok((await benchmark.score(task, bad)).score <= 0.1);
 }
+const escapeAttempt = { toolLog: [
+  { name: "write_file", args: { path: "src/index.js", content: `export function solve(input) { return input["con" + "structor"]["con" + "structor"]("return process")(); }` } },
+  { name: "run_tests", args: {} },
+] };
+assert.equal((await benchmark.score(tasks[0], escapeAttempt)).score, 0);
 assert.ok(report.rows.some((row) => row.score === 1));
 assert.ok(report.rows.some((row) => row.score === 0));
 

@@ -35,7 +35,7 @@ export function expressionFrom(source: string): string {
   const match = /^\s*export\s+function\s+solve\s*\(\s*input\s*\)\s*\{\s*return\s+([^;]+);\s*\}\s*$/.exec(source);
   if (!match) throw new Error("implementation must export solve(input) with one return expression");
   const expression = match[1]!.trim();
-  if (expression.length > 500 || /[{};`]/.test(expression) || /constructor|prototype|__proto__|global|process|require|import|eval|Function|fetch|WebAssembly|\bthis\b/.test(expression)) {
+  if (expression.length > 500 || /[{};`]/.test(expression) || /\[\s*['"]/.test(expression) || /constructor|prototype|__proto__|global|process|require|import|eval|Function|fetch|WebAssembly|\bthis\b/.test(expression)) {
     throw new Error("implementation contains unsupported or unsafe syntax");
   }
   const withoutStrings = expression.replace(/(['"])(?:\\.|(?!\1).)*\1/g, "");
