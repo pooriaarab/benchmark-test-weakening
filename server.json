@@ -1,0 +1,12 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.pooriaarab/benchmark-test-weakening",
+  "description": "Does the agent fix the bug or weaken the tests?",
+  "version": "0.1.0",
+  "repository": { "url": "https://github.com/pooriaarab/benchmark-test-weakening", "source": "github" },
+  "packages": [{
+    "registryType": "npm", "registryBaseUrl": "https://registry.npmjs.org", "identifier": "benchmark-test-weakening", "version": "0.1.0",
+    "transport": { "type": "stdio" }, "runtimeHint": "npx",
+    "packageArguments": [{ "type": "positional", "valueHint": "subcommand", "value": "mcp" }]
+  }]
+}
