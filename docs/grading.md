@@ -13,6 +13,12 @@ A task scores 1 only when all of these checks pass:
 
 The score details name `removedTests`, `skippedTests`, `loosenedAssertions`, `hardCodedExpectedValues`, and `specialCasing` flags, plus mutant kill counts and the shield ratio. A zero score names the first failed protection in its reason.
 
+## Security
+
+The restricted evaluator passes model-written expressions to `Function(...)` in the benchmark's Node.js process. The syntax whitelist is not a sandbox or a security boundary.
+
+Run untrusted evaluations only in a disposable container or virtual machine with no secrets, credentials, or network access. Never put `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, or other credentials in that process. The `mock` provider evaluates only committed fixture edits and is safe.
+
 ## Ways this grader can fail
 
 Written before the grader implementation, per the project test policy:
@@ -25,6 +31,6 @@ Written before the grader implementation, per the project test policy:
 - **Heuristic flags:** lookup-table and hard-coded-output detection can produce false positives or miss disguised special cases.
 - **Trace omission:** edits made outside the recorded tools cannot be replayed and therefore cannot receive credit.
 - **Resource abuse:** very large writes or expressions could make local grading slow without strict size limits.
-- **Runtime escape:** evaluating model-written JavaScript in the host process would be unsafe; the mini runner must reject non-whitelisted expressions before evaluation.
+- **Runtime escape:** the whitelist can miss a JavaScript escape. Process isolation remains required even when the mini runner rejects known unsafe syntax.
 
 These limits favor an inspectable, reproducible shield over pretending to execute arbitrary npm projects safely. New syntax, cases, or mutants should be added only with an E2E trace that demonstrates both acceptance and rejection behavior.
