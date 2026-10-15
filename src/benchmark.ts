@@ -29,5 +29,7 @@ export const benchmark = defineBenchmark({
     refresh: "Review new modules and mutants once per minor release, select a new seed, regenerate both splits, and record the seed and review date. Do not silently change tasks within a released version.",
   }],
   gradingMethod: "Deterministic trace replay, hidden original and held-out cases, plus mutation-shield preservation; no model judge.",
+  // benchmark-core 0.1 types saturation as numeric, while the directory schema also accepts "unknown".
+  saturation: "unknown" as unknown as number,
   shareCardTitle: "Test-strength shield",
 });
