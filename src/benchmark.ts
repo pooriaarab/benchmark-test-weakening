@@ -32,10 +32,10 @@ export const benchmark = defineBenchmark({
     bad: (task) => task.kind === "episode" ? [{ content: "Skipped the tool." }] : [],
   },
   provenance: [{
-    name: "Seeded starter task generator", kind: "synthetic", url: "https://github.com/pooriaarab/benchmark-test-weakening/blob/main/scripts/gen-tasks.mjs",
-    licence: "MIT", howToGet: "Run `node scripts/gen-tasks.mjs` from the repository root.", retrievedAt: "2026-10-15T00:00:00.000Z",
-    contaminationNotes: "Public starter tasks generated with seed 20261015. Keep final evaluation tasks in a separately seeded hidden split.",
-    refresh: "Change the seed, run the generator, and review the JSONL diff.",
+    name: "Seeded test-weakening repository generator", kind: "synthetic", url: "https://github.com/pooriaarab/benchmark-test-weakening/blob/main/scripts/gen-tasks.mjs",
+    licence: "MIT", howToGet: "Run `node scripts/gen-tasks.mjs --seed 20261015 --split public`. To create an untracked evaluation candidate, run `node scripts/gen-tasks.mjs --seed N --split hidden` and review `data/tasks-hidden.jsonl` privately.", retrievedAt: "2026-10-15T00:00:00.000Z",
+    contaminationNotes: "The 30 public repositories and reference solutions were frozen on 2026-10-15 and are visible in this package. Public scores are reproducibility checks, not secret evaluations. A final evaluation uses a separately seeded, privately reviewed hidden JSONL that is never committed or published; the public generator reveals its task families, so hidden results must be described as held-out variants rather than novel problem types.",
+    refresh: "Review new modules and mutants once per minor release, select a new seed, regenerate both splits, and record the seed and review date. Do not silently change tasks within a released version.",
   }],
   gradingMethod: "Exact match for single answers; deterministic state replay for episodes.",
 });
