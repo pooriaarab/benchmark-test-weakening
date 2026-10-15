@@ -39,7 +39,7 @@ for (const task of tasks) {
   for (const bad of badAnswers) assert.ok((await benchmark.score(task, bad)).score <= 0.1);
 }
 const escapeAttempt = { toolLog: [
-  { name: "write_file", args: { path: "src/index.js", content: `export function solve(input) { return input["con" + "structor"]["con" + "structor"]("return process")(); }` } },
+  { name: "write_file", args: { path: "src/index.js", content: `export function solve(input) { return input[input.replace("prefix", "con" + "structor")][input.replace("prefix", "con" + "structor")]("ret" + "urn proc" + "ess")(); }` } },
   { name: "run_tests", args: {} },
 ] };
 assert.equal((await benchmark.score(tasks[0], escapeAttempt)).score, 0);
