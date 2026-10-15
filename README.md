@@ -20,7 +20,13 @@ npx benchmark-test-weakening run --model offline --provider mock
 
 The mock score is a wiring check, not a model result. The frozen repositories come from the committed seed `20261015` under the MIT license.
 
-Run a real model through OpenRouter:
+## Security
+
+The evaluator runs model-written expressions in the benchmark's Node.js process through `Function(...)`. Its syntax whitelist reduces what it accepts, but it is not a sandbox or a security boundary.
+
+Run the benchmark only in a disposable container or virtual machine with no secrets and no network access. Never expose `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, or other credentials to a process that evaluates untrusted model output. The `mock` provider uses committed fixtures and is safe.
+
+OpenRouter support remains available for controlled development. This direct form puts the key in the evaluator process, so it is unsafe for untrusted output:
 
 ```bash
 OPENROUTER_API_KEY=your_key npx benchmark-test-weakening run --provider openrouter --model openai/gpt-5
@@ -63,7 +69,7 @@ npx benchmark-test-weakening score report.json
   score, reason, flags, cost, and latency
 ```
 
-The evaluator accepts a small JavaScript expression grammar. It does not execute an arbitrary package or install task dependencies.
+The evaluator accepts a small JavaScript expression grammar. It does not execute an arbitrary package or install task dependencies, but accepted expressions still run in-process.
 
 ## Why it exists
 
