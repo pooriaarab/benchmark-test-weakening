@@ -1,0 +1,19 @@
+# benchmark-test-weakening
+
+> Does the agent fix the bug or weaken the tests?
+
+Package: https://www.npmjs.com/package/benchmark-test-weakening
+Repository: https://github.com/pooriaarab/benchmark-test-weakening
+Directory: https://aibenchmarkindex.com/benchmarks/benchmark-test-weakening
+
+## Exports
+
+The root exports `benchmark`, `run`, and `score`. `benchmark-test-weakening/api` exports the fetch-style `handler`. `benchmark-test-weakening/mcp` exports MCP builders.
+
+## Commands
+
+The CLI supports list, show, run, score, card, provenance, index-entry, serve, and mcp. Use the mock provider for offline verification.
+
+## Verification
+
+Run `npm run ci:local`. The report is `artifacts/e2e-report.json`.
