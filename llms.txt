@@ -1,19 +1,28 @@
 # benchmark-test-weakening
 
-> Does the agent fix the bug or weaken the tests?
+> Deterministic coding-agent benchmark for detecting fixes that weaken tests.
 
 Package: https://www.npmjs.com/package/benchmark-test-weakening
 Repository: https://github.com/pooriaarab/benchmark-test-weakening
 Directory: https://private-repo-337e.com/benchmarks/benchmark-test-weakening
+Grading: https://github.com/pooriaarab/benchmark-test-weakening/blob/main/docs/grading.md
+
+## What it measures
+
+Thirty virtual JavaScript repositories each contain one buggy pure function and a failing test suite. A score of 1 requires passing public tests, a hidden original copy, held-out cases, and a mutation-strength check. The grader is deterministic and uses no model judge.
 
 ## Exports
 
-The root exports `benchmark`, `run`, and `score`. `benchmark-test-weakening/api` exports the fetch-style `handler`. `benchmark-test-weakening/mcp` exports MCP builders.
+The root exports `benchmark`, `run`, and `score`. `benchmark-test-weakening/api` exports a fetch-style handler. `benchmark-test-weakening/mcp` exports Model Context Protocol server builders.
 
 ## Commands
 
-The CLI supports list, show, run, score, card, provenance, index-entry, serve, and mcp. Use the mock provider for offline verification.
+The CLI commands are `list`, `show`, `run`, `score`, `card`, `provenance`, `index-entry`, `serve`, and `mcp`.
 
-## Verification
+## Offline verification
 
-Run `npm run ci:local`. The report is `artifacts/e2e-report.json`.
+Run `npx benchmark-test-weakening run --model offline --provider mock`. The mock result proves wiring only. It is not model performance.
+
+## Data and limits
+
+The MIT-licensed synthetic tasks are reproducible with `node scripts/gen-tasks.mjs --seed 20261015 --split public`. Public references can contaminate model training. The restricted evaluator accepts only the documented small JavaScript grammar.
