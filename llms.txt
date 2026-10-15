@@ -23,6 +23,10 @@ The CLI commands are `list`, `show`, `run`, `score`, `card`, `provenance`, `inde
 
 Run `npx benchmark-test-weakening run --model offline --provider mock`. The mock result proves wiring only. It is not model performance.
 
+## Security
+
+The restricted evaluator runs model-written expressions in-process with `Function(...)`. It is not a sandbox or security boundary. Run untrusted evaluations only in a disposable container or VM with no secrets, credentials, or network access. Never expose `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, or other credentials to that process. The `mock` provider uses committed fixtures and is safe.
+
 ## Data and limits
 
 The MIT-licensed synthetic tasks are reproducible with `node scripts/gen-tasks.mjs --seed 20261015 --split public`. Public references can contaminate model training. The restricted evaluator accepts only the documented small JavaScript grammar.
