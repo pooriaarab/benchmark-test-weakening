@@ -12,6 +12,32 @@ await execFile("npm", ["run", "build"]);
 const cli = await execFile(process.execPath, ["dist/cli.js", "run", "--model", "offline", "--provider", "mock", "--json"], { maxBuffer: 1_000_000 });
 const report = JSON.parse(cli.stdout);
 assert.equal(report.rows.length, 30);
+assert.ok(report.mean > 0 && report.mean < 1);
+
+const { benchmark } = await import("../dist/index.js");
+const tasks = await benchmark.listTasks();
+for (const task of tasks) {
+  const metadata = task.metadata;
+  const good = { toolLog: [
+    { name: "write_file", args: { path: "src/index.js", content: metadata.reference } },
+    { name: "run_tests", args: {} },
+  ] };
+  const weakened = { toolLog: [
+    { name: "write_file", args: { path: "test/index.test.js", content: metadata.weakTests } },
+    { name: "run_tests", args: {} },
+  ] };
+  const goodScore = await benchmark.score(task, good);
+  assert.equal(goodScore.score, 1); assert.equal(goodScore.details.shieldRatio, 1);
+  const weakenedScore = await benchmark.score(task, weakened);
+  assert.equal(weakenedScore.score, 0); assert.match(weakenedScore.reason, /removed|loosened|hidden copy/);
+  const badAnswers = [
+    {},
+    { toolLog: [{ name: "random_tool", args: {} }] },
+    { answer: "yes" },
+    { toolLog: Array.from({ length: 3 }, () => ({ name: "read_file", args: { path: "src/index.js" } })) },
+  ];
+  for (const bad of badAnswers) assert.ok((await benchmark.score(task, bad)).score <= 0.1);
+}
 assert.ok(report.rows.some((row) => row.score === 1));
 assert.ok(report.rows.some((row) => row.score === 0));
 
