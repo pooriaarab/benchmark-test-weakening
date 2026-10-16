@@ -15,10 +15,20 @@ export interface ScoreOptions {
   tasksPath?: string;
   seed?: number;
 }
+const scoredTaskFiles = new Map<string, Promise<ReturnType<typeof withTaskList>>>();
+function scoredTasks(path: string) {
+  let pending = scoredTaskFiles.get(path);
+  if (!pending) { pending = withTasks(path); scoredTaskFiles.set(path, pending); }
+  return pending;
+}
 export async function score(taskId: string, submission: Trace, options?: ScoreOptions) {
+  if (options?.tasks !== undefined && options?.tasksPath !== undefined) {
+    throw new Error("pass either tasks or tasksPath, not both");
+  }
   const path = options?.tasksPath ?? (typeof options?.tasks === "string" ? options.tasks : undefined);
-  const list = Array.isArray(options?.tasks) ? options.tasks : undefined;
-  const target = path !== undefined ? await withTasks(path) : list !== undefined ? withTaskList(list) : benchmark;
+  const target = path !== undefined
+    ? await scoredTasks(path)
+    : Array.isArray(options?.tasks) ? withTaskList(options.tasks) : benchmark;
   const task = await target.getTask(taskId); if (!task) throw new Error(`Task not found: ${taskId}`);
   return target.score(task, submission, options?.seed === undefined ? {} : { seed: options.seed });
 }

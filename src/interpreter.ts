@@ -19,6 +19,9 @@ const MAX_OUTPUT = 100_000;
 const MAX_STRING = 200_000;
 const MAX_ARRAY = 100_000;
 const MAX_REGEX_SOURCE = 300;
+const MAX_REGEX_INPUT = 1_024;
+const MAX_REGEX_RUN = 3;
+const MAX_REGEX_QUANTIFIERS = 10;
 
 interface Ctx {
   steps: number;
@@ -148,6 +151,18 @@ function method(name: string, receiver: unknown): Builtin {
         throw forbidden("string result exceeds the size limit");
       }
     }
+    // Native regexp work is invisible to the step budget, so cap the scanned
+    // text and charge its length as steps: bounded backtracking per call, and
+    // bounded total text across calls.
+    if (receiver instanceof RegExp) {
+      const input = String(args[0] ?? "");
+      if (input.length > MAX_REGEX_INPUT) throw forbidden("regex input exceeds the size limit");
+      step(ctx, Math.max(1, input.length));
+    }
+    if (typeof receiver === "string" && args.some((arg) => arg instanceof RegExp)) {
+      if (receiver.length > MAX_REGEX_INPUT) throw forbidden("regex input exceeds the size limit");
+      step(ctx, Math.max(1, receiver.length));
+    }
     const fn = (receiver as Record<string, unknown>)[name] as (...a: unknown[]) => unknown;
     const mapped = args.map((arg) => (isCallable(arg) ? (...a: unknown[]) => callValue(ctx, arg, a) : arg));
     try {
@@ -202,6 +217,30 @@ function checkRegex(source: string, flags: string): RegExp {
   const stripped = source.replace(/\\./g, "..").replace(/\[[^\]]*\]/g, "[]");
   if (/\\[1-9]/.test(source) || /\(\?/.test(stripped) || /\)[+*?{]/.test(stripped)) {
     throw forbidden("regex is outside the safe subset");
+  }
+  // The step budget does not reach inside a native regexp, so bound the
+  // backtracking surface instead: runs of adjacent variable-quantifier atoms
+  // (.*.*.*x is polynomial, a?a?a?... is exponential) and the total number of
+  // variable quantifiers stay small, and exec/test inputs are capped below.
+  let run = 0;
+  let quantifiers = 0;
+  for (let index = 0; index < stripped.length; index++) {
+    const char = stripped[index]!;
+    if (char === "(" || char === ")" || char === "|") { run = 0; continue; }
+    let next = index + 1;
+    const mark = stripped[next];
+    if (mark === "*" || mark === "+" || mark === "?") { quantifiers += 1; run += 1; next += 1; }
+    else if (mark === "{") {
+      const close = stripped.indexOf("}", next);
+      const inner = close === -1 ? "" : stripped.slice(next + 1, close);
+      if (/^\d+$/.test(inner)) run = 0;
+      else { quantifiers += 1; run += 1; }
+      next = close === -1 ? next : close + 1;
+    } else run = 0;
+    if (run > MAX_REGEX_RUN || quantifiers > MAX_REGEX_QUANTIFIERS) {
+      throw forbidden("regex is outside the safe subset");
+    }
+    index = next - 1;
   }
   try {
     return new RegExp(source, flags);

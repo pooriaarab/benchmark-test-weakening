@@ -195,6 +195,11 @@ const ESCAPE_EXPRESSIONS = [
   'Array.from({ length: 4294967295 }, (x) => x)',
   '"a".repeat(1000000000)',
   'input.match(/(a+)+$/)',
+  'input.split(/.*.*.*.*x/)',
+  'input.split(/a?a?a?a?a?a?/)',
+  'input.split(/\\d+\\s+\\w+\\s+\\d+\\s+\\w+\\s+\\d+\\s+\\w+\\s+\\d+\\s+\\w+\\s+\\d+\\s+\\w+\\s+\\d+/)',
+  '"a".repeat(2000).replace(/x+/, "y")',
+  'new RegExp(".*.*.*.*x").test(input)',
 ];
 const ESCAPE_SOURCES = [
   'export function solve(input) { with(input) { return x; } }',
@@ -224,6 +229,12 @@ const pidProbe = await benchmark.score(tasks[0], { toolLog: [
 ] });
 assert.equal(pidProbe.score, 0);
 assert.ok(!String(pidProbe.reason).includes(String(process.pid)), "process.pid leaked into grading output");
+// The regex subset still accepts and grades an honest regex answer end to end.
+const regexSolve = await benchmark.score(tasks[0], { toolLog: [
+  { name: "write_file", args: { path: "src/index.js", content: "export function solve(input) { return /^pre/.test(input); }" } },
+  { name: "run_tests", args: {} },
+] });
+assert.equal(regexSolve.score, 1, `grammar regex must still grade: ${regexSolve.reason}`);
 const deepNest = `export function solve(input) { return ${"(".repeat(3000)}1${")".repeat(3000)}; }`;
 assert.equal((await benchmark.score(tasks[0], { toolLog: [
   { name: "write_file", args: { path: "src/index.js", content: deepNest } },
@@ -289,6 +300,10 @@ const hiddenTrace = { toolLog: [
 ] };
 assert.equal((await scoreSdk(hiddenTasks[0].id, hiddenTrace, { tasks: hiddenFile, seed: 7 })).score, 1, "SDK score must accept a tasks path");
 assert.equal((await scoreSdk(hiddenTasks[0].id, hiddenTrace, { tasksPath: hiddenFile })).score, 1, "SDK score must accept tasksPath");
+await assert.rejects(
+  scoreSdk(hiddenTasks[0].id, hiddenTrace, { tasks: hiddenFile, tasksPath: hiddenFile }),
+  /either tasks or tasksPath/,
+);
 assert.equal((await scoreSdk(hiddenTasks[0].id, hiddenTrace, { tasks: hiddenTasks, seed: 99 })).score, 1, "SDK score must accept a task array");
 const seededLeak = await scoreSdk(hiddenTasks[0].id, { toolLog: [
   { name: "write_file", args: { path: "src/index.js", content: publicBySlug.get(hiddenTasks[0].id.split("-").slice(2).join("-")).metadata.reference } },
