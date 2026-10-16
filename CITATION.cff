@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use this work, please cite it using the metadata below."
+title: "benchmark-test-weakening"
+type: software
+authors:
+  - family-names: Arab
+    given-names: Pooria
+version: "0.2.0"
+date-released: 2026-10-16
+license: MIT
+repository-code: https://github.com/pooriaarab/benchmark-test-weakening
+url: "https://private-repo-337e.com/benchmarks/benchmark-test-weakening"
+abstract: "Coding-agent benchmark that detects test weakening with hidden assertions, held-out cases, and deterministic mutation testing."
+keywords:
+  - ai-benchmark
+  - llm-evaluation
+  - agent-evaluation
+  - deterministic-grader
