@@ -70,6 +70,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.20.1",
+    "acorn": "^8.19.0",
     "benchmark-core": "^0.1.0"
   },
   "devDependencies": {
