@@ -2,6 +2,7 @@ import { isDeepStrictEqual } from "node:util";
 import { parse } from "acorn";
 import { mulberry32, type Environment, type JsonValue, type Task, type ToolResult } from "benchmark-core";
 import { astDepth, interpret } from "./interpreter.js";
+import { evaluateSandboxed } from "./sandbox.js";
 
 export interface WeakeningMetadata extends Record<string, JsonValue> {
   files: Record<string, string>;
@@ -22,12 +23,12 @@ const PATHS = ["src/index.js", "test/index.test.js"] as const;
 type AstNode = { type: string; start: number; end: number; [key: string]: unknown };
 
 const SAFE_GLOBALS = new Set([
-  "Array", "BigInt", "Boolean", "Infinity", "JSON", "Math", "NaN", "Number", "Object",
+  "Array", "Boolean", "Infinity", "JSON", "Math", "NaN", "Number", "Object",
   "RegExp", "String", "Symbol", "decodeURIComponent", "encodeURIComponent", "isFinite",
   "isNaN", "parseFloat", "parseInt", "undefined",
 ]);
 const CALLABLE_GLOBALS = new Set([
-  "Array", "BigInt", "Boolean", "Number", "RegExp", "String", "Symbol", "decodeURIComponent",
+  "Array", "Boolean", "Number", "RegExp", "String", "Symbol", "decodeURIComponent",
   "encodeURIComponent", "isFinite", "isNaN", "parseFloat", "parseInt",
 ]);
 const DENIED_NAMES = new Set([
@@ -106,6 +107,7 @@ function eachNode(node: AstNode, visit: (node: AstNode) => void): void {
 function checkExpr(node: AstNode, scope: ReadonlySet<string>): void {
   switch (node.type) {
     case "Literal":
+      if ((node as { bigint?: string }).bigint !== undefined) throw new Error("bigint literals are not in the grammar");
       return;
     case "Identifier": {
       const name = node.name as string;
@@ -292,7 +294,7 @@ export function expressionFrom(source: string): string {
   return solveParts(source).expression;
 }
 const compiled = new Map<string, { params: string[]; node: AstNode }>();
-export function evaluateSource(source: string, input: JsonValue): JsonValue {
+export function evaluateLocal(source: string, input: JsonValue): JsonValue {
   let entry = compiled.get(source);
   if (!entry) {
     if (compiled.size > 500) compiled.clear();
@@ -303,6 +305,9 @@ export function evaluateSource(source: string, input: JsonValue): JsonValue {
   const result = interpret(entry.node, entry.params, [structuredClone(input)]);
   if (result === undefined) return null;
   return normalizeZeros(structuredClone(result) as JsonValue);
+}
+export function evaluateSource(source: string, input: JsonValue): JsonValue {
+  return evaluateSandboxed(source, input, evaluateLocal);
 }
 interface Assertion { line: string; input: JsonValue; expected: JsonValue; }
 export function assertionsFrom(source: string): Assertion[] {
@@ -458,7 +463,7 @@ const GRAMMAR = [
   "export such as `export const solve = (input) => <expression>;`. The expression may use its",
   "parameters, literals, template literals, regex literals, arrays, object literals, spreads,",
   "optional chaining, arithmetic, comparison, logical and ternary operators, arrow callbacks",
-  "like `input.map((x) => x)`, and pure built-ins (Math, JSON, Number, String, Boolean, BigInt,",
+  "like `input.map((x) => x)`, and pure built-ins (Math, JSON, Number, String, Boolean,",
   "Symbol, Array, Object, RegExp, parseInt, parseFloat, isNaN, isFinite). Statements, loops,",
   "assignments, `new`, `this`, imports, and host or nondeterministic globals",
   "(process, require, fetch, timers, Math.random, Date) are outside the grammar and rejected.",
