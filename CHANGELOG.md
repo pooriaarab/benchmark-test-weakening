@@ -20,23 +20,28 @@ Scoring changed. Results produced by 0.1.0 are not comparable with 0.2.0.
   `worker.terminate()` cannot interrupt a backtracking regex, so the worker
   leaked and the parent could never exit. No literals, `RegExp`,
   `match`/`test`/`search`/`exec`, or regex arguments to `replace`/`split`
-  are accepted now; string methods cover the same cases. The step budget can
-  no longer be forged:
-  `Object.values(Array.from)` used to leak the interpreter's internal `call`
-  function, which a model-built `{ steps: 1e18 }` then drove past every
-  limit; builtins and closures are now class instances with private state,
-  and `Object` inspection helpers refuse callables and functions. `BigInt`
-  was removed from the grammar because `BigInt("9".repeat(150000)) ** 900n`
-  hung the evaluator.
+  are accepted now; string methods cover the same cases. Evaluations moved
+  from a worker thread blocked on `Atomics.wait` to a dedicated child
+  process awaited over IPC: the parent's event loop stays free (a hostile
+  `/v1/score` request used to freeze the API for 10 s) and an evaluator that
+  overruns is SIGKILLed with its process, so even a wedged computation dies.
+  The step budget can no longer be forged: `Object.values(Array.from)` used
+  to leak the interpreter's internal `call` function, which a model-built
+  `{ steps: 1e18 }` then drove past every limit; builtins and closures are
+  now class instances with private state, and `Object` inspection helpers
+  refuse callables and functions. `BigInt` was removed from the grammar
+  because `BigInt("9".repeat(150000)) ** 900n` hung the evaluator.
+- A suite whose evaluation fails or times out no longer counts mutants as
+  killed: only a real assertion failure is a kill, and the task is marked
+  failed with an `evaluationFailed` detail instead of a phantom shield.
 
 ### Changed
 
 - Honest fixes written in equivalent syntax now pass. The implementation
   evaluator accepts a wider expression grammar (arrow functions, `slice`,
   `at`, `charAt`, `split`/`join`, template literals, `Boolean`, and optional
-  semicolons), the allowed grammar is
-  stated in the task system text, and the `=== true` / `x ? true : false`
-  gaming heuristics were removed.
+  semicolons), the allowed grammar is stated in the task system text, and
+  the `=== true` / `x ? true : false` gaming heuristics were removed.
 - The hidden split is a real held-out set. Hidden tasks are redrawn per
   family from the generation seed (new constants, names, inputs, and
   ordering), carry `hidden-` ids, and are written outside `data/` so they
