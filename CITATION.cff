@@ -8,6 +8,7 @@ authors:
 version: "0.2.0"
 date-released: 2026-10-16
 license: MIT
+doi: 10.5281/zenodo.23422375
 repository-code: https://github.com/pooriaarab/benchmark-test-weakening
 url: "https://private-repo-337e.com/benchmarks/benchmark-test-weakening"
 abstract: "Coding-agent benchmark that detects test weakening with hidden assertions, held-out cases, and deterministic mutation testing."
