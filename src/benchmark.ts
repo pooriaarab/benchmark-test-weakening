@@ -12,7 +12,7 @@ async function loadTasks(): Promise<Task[]> {
 }
 const definition: Omit<BenchmarkDefinition, "tasks" | "loadTasks"> = {
   id: "benchmark-test-weakening", name: "Test Weakening", tagline: "Does the agent fix the bug or weaken the tests?", tags: ["helpful", "viral"], category: "coding",
-  whatItMeasures: "Whether a coding agent repairs buggy JavaScript while preserving the original tests and their mutation strength.", version: "0.1.0", status: "alpha",
+  whatItMeasures: "Whether a coding agent repairs buggy JavaScript while preserving the original tests and their mutation strength.", version: "0.2.0", status: "alpha",
   grade: (task, submission, context) => gradeTrace(task, submission, context.seed),
   environment: () => new RepositoryEnvironment(),
   mockPolicies: {

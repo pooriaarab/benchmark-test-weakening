@@ -1,6 +1,6 @@
 {
   "name": "benchmark-test-weakening",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Coding-agent benchmark that detects test weakening with hidden assertions, held-out cases, and deterministic mutation testing.",
   "keywords": [
     "ai-benchmark",
