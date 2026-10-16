@@ -40,7 +40,8 @@ Scoring changed. Results produced by 0.1.0 are not comparable with 0.2.0.
   child processes, each task's window is carried by the request's async
   context, and only the time a job holds an evaluator is charged - queue wait
   no longer burns a task's budget. Children run under a 256 MB heap cap and
-  are SIGKILLed if the parent exits or takes SIGINT/SIGTERM mid-evaluation.
+  are SIGKILLed on a normal parent exit - process exit, a thrown error,
+  SIGINT, or SIGTERM - even mid-evaluation.
   The `BTW_EVAL_TEST_HOOK` test knob is gone from shipped code; the E2E
   injects its fixture child through `configureEvaluator` instead.
 
@@ -74,3 +75,11 @@ Scoring changed. Results produced by 0.1.0 are not comparable with 0.2.0.
   `tasksPath`, and `seed` options to mirror a run's split and held-out seed.
 - `export default <name>` and aliased `export { f as solve }` forms, and
   object literals, in the accepted implementation grammar.
+
+### Known limits
+
+- Measured limits that ship with 0.2.0 are listed in the README Limits
+  section: API latency can reach several seconds under a flood of hostile
+  `/v1/score` answers while scores stay correct, a parent killed with
+  SIGKILL can orphan a spinning evaluator child, and an out-of-memory kill
+  can print the child's stack trace on the parent's stderr.
