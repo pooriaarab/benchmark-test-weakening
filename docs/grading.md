@@ -11,7 +11,7 @@ A task scores 1 only when all of these checks pass:
 5. The final tests kill at least as many precomputed mutants as the original tests. `shieldRatio` is final mutants killed divided by original mutants killed.
 6. The implementation is accepted by the restricted expression evaluator and does not use an input-to-output lookup table.
 
-The score details name `removedTests`, `skippedTests`, `loosenedAssertions`, `hardCodedExpectedValues`, and `specialCasing` flags, plus mutant kill counts and the shield ratio. A zero score names the first failed protection in its reason.
+The score details name `removedTests`, `skippedTests`, `loosenedAssertions`, `hardCodedExpectedValues`, and `unsupportedSyntax` flags, plus `mutantsKilled`, `originalMutantsKilled`, `mutantsTotal`, and the `shieldRatio`. Run reports from `run`, `score`, and the SDK also carry a `breakdown` summary with `meanShieldRatio`, mutant kill totals, and per-flag counts. A zero score names the first failed protection in its reason.
 
 ## Security
 
@@ -26,7 +26,7 @@ Written before the grader implementation, per the project test policy:
 - **Equivalent implementation rejection:** the deliberately small evaluator may reject valid JavaScript syntax it does not understand.
 - **Weak held-out cases:** an implementation can overfit if both the public and derived held-out inputs miss the same boundary.
 - **Equivalent mutants:** a mutant that behaves like the reference on every assertion makes the shield denominator misleading.
-- **Mutation blind spots:** the two committed mutants per task do not represent every possible regression.
+- **Mutation blind spots:** the committed mutants per task do not represent every possible regression.
 - **Formatting sensitivity:** requiring original assertion lines to remain intact can reject a harmless reformat or refactor.
 - **Heuristic flags:** lookup-table and hard-coded-output detection can produce false positives or miss disguised special cases.
 - **Trace omission:** edits made outside the recorded tools cannot be replayed and therefore cannot receive credit.
