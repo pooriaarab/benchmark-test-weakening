@@ -217,12 +217,15 @@ function getProperty(ctx: Ctx, object: unknown, key: unknown): unknown {
   if (typeof object === "string") {
     if (name === "length") return object.length;
     if (isIndex(name)) return object[Number(name)];
+    // Numeric misses ("-1", "1.5") read undefined like JavaScript.
+    if (name !== "" && !Number.isNaN(Number(name))) return undefined;
     return pick("String", STRING_METHODS);
   }
   if (Array.isArray(object)) {
     if (object.length > MAX_ARRAY) throw forbidden("array exceeds the size limit");
     if (name === "length") return object.length;
     if (isIndex(name)) return object[Number(name)];
+    if (name !== "" && !Number.isNaN(Number(name))) return undefined;
     return pick("Array", ARRAY_METHODS);
   }
   if (typeof object === "number") return pick("Number", NUMBER_METHODS);
@@ -233,8 +236,11 @@ function getProperty(ctx: Ctx, object: unknown, key: unknown): unknown {
     throw forbidden(`property is not in the grammar: ${name}`);
   }
   if (typeof object === "object" && object !== null) {
+    // Missing keys read undefined like JavaScript; only own data properties
+    // are ever returned, so inherited members (constructor, hasOwnProperty)
+    // stay unreachable.
     if (Object.hasOwn(object, name)) return (object as Record<string, unknown>)[name];
-    throw forbidden(`property is not in the grammar: ${name}`);
+    return undefined;
   }
   throw forbidden(`property is not reachable on this value: ${name}`);
 }

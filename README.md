@@ -201,7 +201,7 @@ The modules were written for this benchmark and licensed MIT. No third-party tes
 - The expression interpreter rejects many valid JavaScript implementations.
 - A handful of mutants and derived held-out cases cannot prove general correctness.
 - Exact assertion preservation rejects harmless test reformatting.
-- Hard-coded-output and special-case flags are heuristics.
+- Hard-coded-output and special-case flags are heuristics. One measured residual: on `28-is-positive` the bug and the fix disagree only at `0`, itself a public input, so a table of the public pairs with a bug fallback scores 1 (1 of 180 cells in the E2E gaming matrix; issue #26).
 - The benchmark covers small pure functions, not package installs or multi-file applications.
 - Remote providers can add cost and retain prompts under their own policies.
 

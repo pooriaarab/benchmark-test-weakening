@@ -51,6 +51,11 @@ Scoring changed. Results produced by 0.1.0 are not comparable with 0.2.0.
   `at`, `charAt`, `split`/`join`, template literals, `Boolean`, and optional
   semicolons), the allowed grammar is stated in the task system text, and
   the `=== true` / `x ? true : false` gaming heuristics were removed.
+- Missing data reads match JavaScript: an absent key on a plain object and
+  an out-of-range or negative index on an array or string return
+  `undefined` instead of raising a grammar error, so honest answers using
+  optional data shape pass. The member allow-list is unchanged for named
+  members.
 - The hidden split is a real held-out set. Hidden tasks are redrawn per
   family from the generation seed (new constants, names, inputs, and
   ordering), carry `hidden-` ids, and are written outside `data/` so they
