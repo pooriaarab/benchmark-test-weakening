@@ -24,6 +24,9 @@ process.on("message", (request: EvalRequest) => {
   } catch (error) {
     payload = { id, ok: false, error: error instanceof Error ? error.message : String(error) };
   }
+  if (JSON.stringify(payload).length > 512 * 1024) {
+    payload = { id, ok: false, error: "evaluation result exceeds the size limit" };
+  }
   process.send(payload);
 });
 
