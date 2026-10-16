@@ -195,6 +195,8 @@ const ESCAPE_EXPRESSIONS = [
   'input.valueOf()',
   'input.__defineGetter__("x", () => 1)',
   'Array(4294967295).map(() => 0)',
+  'Array.from({ length: 1e9 })',
+  'Array.from({ length: 4294967295 }, (x) => x)',
   '"a".repeat(1000000000)',
   'input.match(/(a+)+$/)',
 ];
