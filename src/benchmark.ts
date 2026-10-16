@@ -1,15 +1,18 @@
 import { readFile } from "node:fs/promises";
-import { defineBenchmark, type Task } from "benchmark-core";
+import { defineBenchmark, type BenchmarkDefinition, type Task } from "benchmark-core";
 import { RepositoryEnvironment, metadataFor } from "./environment.js";
 import { gradeTrace } from "./grader.js";
 
-async function loadTasks(): Promise<Task[]> {
-  const text = await readFile(new URL("../data/tasks.jsonl", import.meta.url), "utf8");
+export async function loadTasksFrom(path: string | URL): Promise<Task[]> {
+  const text = await readFile(path, "utf8");
   return text.trim().split("\n").map((line) => JSON.parse(line) as Task);
 }
-export const benchmark = defineBenchmark({
+async function loadTasks(): Promise<Task[]> {
+  return loadTasksFrom(new URL("../data/tasks.jsonl", import.meta.url));
+}
+const definition: Omit<BenchmarkDefinition, "tasks" | "loadTasks"> = {
   id: "benchmark-test-weakening", name: "Test Weakening", tagline: "Does the agent fix the bug or weaken the tests?", tags: ["helpful", "viral"], category: "coding",
-  whatItMeasures: "Whether a coding agent repairs buggy JavaScript while preserving the original tests and their mutation strength.", version: "0.1.0", status: "alpha", loadTasks,
+  whatItMeasures: "Whether a coding agent repairs buggy JavaScript while preserving the original tests and their mutation strength.", version: "0.1.0", status: "alpha",
   grade: (task, submission, context) => gradeTrace(task, submission, context.seed),
   environment: () => new RepositoryEnvironment(),
   mockPolicies: {
@@ -32,4 +35,11 @@ export const benchmark = defineBenchmark({
   // benchmark-core 0.1 types saturation as numeric, while the directory schema also accepts "unknown".
   saturation: "unknown" as unknown as number,
   shareCardTitle: "Test-strength shield",
-});
+};
+export const benchmark = defineBenchmark({ ...definition, loadTasks });
+export function withTaskList(tasks: readonly Task[]) {
+  return defineBenchmark({ ...definition, tasks });
+}
+export async function withTasks(path: string | URL) {
+  return withTaskList(await loadTasksFrom(path));
+}

@@ -176,6 +176,22 @@ const pack = await execFile("npm", ["pack", "--dry-run", "--json"], { maxBuffer:
 const packedPaths = JSON.parse(pack.stdout)[0].files.map((file) => file.path);
 assert.ok(!packedPaths.some((path) => path.includes("hidden")), "npm package must not ship hidden data");
 
+const hiddenRun = await execFile(process.execPath, ["dist/cli.js", "run", "--tasks", hiddenFile, "--model", "offline", "--provider", "mock", "--json"], { maxBuffer: 1_000_000 });
+const hiddenReport = JSON.parse(hiddenRun.stdout);
+assert.equal(hiddenReport.rows.length, 30);
+assert.ok(hiddenReport.rows.every((row) => row.taskId.startsWith("hidden-")));
+const hiddenList = await execFile(process.execPath, ["dist/cli.js", "list", "--tasks", hiddenFile]);
+assert.ok(hiddenList.stdout.includes("hidden-01-"));
+const { run: runSdk } = await import("../dist/index.js");
+const { mockAdapter } = await import("benchmark-core");
+const sdkReport = await runSdk(mockAdapter({ seed: 1, policies: benchmark.definition.mockPolicies }), { tasks: hiddenFile });
+assert.equal(sdkReport.rows.length, 30);
+assert.ok(sdkReport.rows.every((row) => row.taskId.startsWith("hidden-")));
+const { handlerForTasks } = await import("../dist/api.js");
+const hiddenHandler = await handlerForTasks(hiddenFile);
+const apiTasks = await (await hiddenHandler(new Request("http://localhost/v1/tasks"))).json();
+assert.ok(apiTasks.tasks.every((task) => task.id.startsWith("hidden-")));
+
 const probe = createNetServer();
 await new Promise((resolve) => probe.listen(0, "127.0.0.1", resolve));
 const address = probe.address(); assert.ok(address && typeof address === "object");
