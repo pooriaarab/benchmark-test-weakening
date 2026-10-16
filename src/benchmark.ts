@@ -28,7 +28,7 @@ export const benchmark = defineBenchmark({
     contaminationNotes: "The 30 public repositories and reference solutions were frozen on 2026-10-15 and are visible in this package. Public scores are reproducibility checks, not secret evaluations. The hidden split regenerates every constant, name, input, and ordering from a private seed, so it shares no prompts or expected answers with the public tasks; the generator must still be published, so hidden results are held-out variants of public families rather than novel problem types.",
     refresh: "Review new modules and mutants once per minor release, select a new seed, regenerate both splits, and record the seed and review date. Do not silently change tasks within a released version.",
   }],
-  gradingMethod: "Deterministic trace replay, hidden original and held-out cases, plus mutation-shield preservation; no model judge.",
+  gradingMethod: "Deterministic trace replay, hidden original and run-seeded held-out cases, plus mutation-shield preservation; no model judge.",
   // benchmark-core 0.1 types saturation as numeric, while the directory schema also accepts "unknown".
   saturation: "unknown" as unknown as number,
   shareCardTitle: "Test-strength shield",

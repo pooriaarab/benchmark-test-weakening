@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { execFile as execFileCallback, spawn } from "node:child_process";
 import { once } from "node:events";
 import { createServer as createNetServer } from "node:net";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -16,7 +16,7 @@ const report = JSON.parse(cli.stdout);
 assert.equal(report.rows.length, 30);
 assert.ok(report.mean > 0 && report.mean < 1);
 
-const { benchmark } = await import("../dist/index.js");
+const { benchmark, heldOutCases } = await import("../dist/index.js");
 const tasks = await benchmark.listTasks();
 
 const referenceExpression = (source) => /return ([^;]+);/.exec(source)[1];
@@ -144,7 +144,12 @@ assert.ok(report.rows.some((row) => row.score === 1));
 assert.ok(report.rows.some((row) => row.score === 0));
 assert.ok(tasks.every((task) => !("hiddenCases" in task.metadata)), "task metadata must not ship held-out cases");
 
-const hiddenDir = join(tmpdir(), `btw-hidden-${process.pid}`);
+const seedA = heldOutCases(tasks[0], 111);
+assert.ok(seedA.length > 0, "held-out derivation produced no cases");
+assert.deepEqual(heldOutCases(tasks[0], 111), seedA, "held-out cases must be reproducible for a run seed");
+assert.notDeepEqual(heldOutCases(tasks[0], 222), seedA, "held-out cases must change with a private run seed");
+
+const hiddenDir = await mkdtemp(join(tmpdir(), "btw-hidden-"));
 const hiddenFile = join(hiddenDir, "tasks.jsonl");
 await execFile(process.execPath, ["scripts/gen-tasks.mjs", "--seed", "424242", "--split", "hidden", "--output", hiddenFile]);
 const hiddenTasks = (await readFile(hiddenFile, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
