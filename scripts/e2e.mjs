@@ -15,9 +15,17 @@ const cli = await execFile(process.execPath, ["dist/cli.js", "run", "--model", "
 const report = JSON.parse(cli.stdout);
 assert.equal(report.rows.length, 30);
 assert.ok(report.mean > 0 && report.mean < 1);
+assert.equal(report.breakdown.scoredRows, 30, "run report must carry a shield breakdown");
+assert.ok(report.breakdown.mutantsTotal >= 150, "expected at least five mutants per task");
+assert.ok(report.breakdown.mutantsKilled > 0 && report.breakdown.originalMutantsKilled > 0);
+assert.ok(typeof report.breakdown.meanShieldRatio === "number" && typeof report.breakdown.flags === "object");
+assert.ok(report.rows.every((row) => row.details && typeof row.details.shieldRatio === "number"), "report rows must carry grading details");
+const textRun = await execFile(process.execPath, ["dist/cli.js", "run", "--model", "offline", "--provider", "mock"], { maxBuffer: 1_000_000 });
+assert.match(textRun.stdout, /Shield breakdown: mean ratio/);
 
 const { benchmark, heldOutCases } = await import("../dist/index.js");
 const tasks = await benchmark.listTasks();
+assert.ok(tasks.every((task) => task.metadata.mutants.length >= 5), "each task needs at least five mutants");
 
 const referenceExpression = (source) => /return ([^;]+);/.exec(source)[1];
 const EXPORT_FORMS = [
@@ -180,6 +188,12 @@ const hiddenRun = await execFile(process.execPath, ["dist/cli.js", "run", "--tas
 const hiddenReport = JSON.parse(hiddenRun.stdout);
 assert.equal(hiddenReport.rows.length, 30);
 assert.ok(hiddenReport.rows.every((row) => row.taskId.startsWith("hidden-")));
+assert.equal(hiddenReport.breakdown.scoredRows, 30, "hidden runs must also carry a shield breakdown");
+const reportFile = join(hiddenDir, "report.json");
+await writeFile(reportFile, JSON.stringify(report));
+const rescored = JSON.parse((await execFile(process.execPath, ["dist/cli.js", "score", reportFile, "--json"], { maxBuffer: 1_000_000 })).stdout);
+assert.equal(rescored.breakdown.scoredRows, 30, "score output must carry a shield breakdown");
+assert.ok(rescored.rows.every((row) => row.details));
 const hiddenList = await execFile(process.execPath, ["dist/cli.js", "list", "--tasks", hiddenFile]);
 assert.ok(hiddenList.stdout.includes("hidden-01-"));
 const { run: runSdk } = await import("../dist/index.js");
@@ -187,6 +201,7 @@ const { mockAdapter } = await import("benchmark-core");
 const sdkReport = await runSdk(mockAdapter({ seed: 1, policies: benchmark.definition.mockPolicies }), { tasks: hiddenFile });
 assert.equal(sdkReport.rows.length, 30);
 assert.ok(sdkReport.rows.every((row) => row.taskId.startsWith("hidden-")));
+assert.equal(sdkReport.breakdown.scoredRows, 30, "SDK runs must carry a shield breakdown");
 const { handlerForTasks } = await import("../dist/api.js");
 const hiddenHandler = await handlerForTasks(hiddenFile);
 const apiTasks = await (await hiddenHandler(new Request("http://localhost/v1/tasks"))).json();
@@ -228,6 +243,10 @@ try {
   for (const [name, args] of calls) {
     const result = await client.callTool({ name, arguments: args });
     if (name === "run_benchmark") assert.equal(result.isError, true); else assert.notEqual(result.isError, true);
+    if (name === "score_answer") {
+      const scored = JSON.parse(result.content[0].text);
+      assert.equal(typeof scored.details.shieldRatio, "number", "MCP score_answer must return grading details");
+    }
   }
 } finally { await client.close(); }
 
