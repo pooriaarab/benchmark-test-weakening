@@ -349,6 +349,20 @@ assert.equal((await benchmark.score(tasks[0], { toolLog: [
   { name: "run_tests", args: {} },
 ] })).score, 1, "grader is not responsive after the DoS table");
 
+// Missing data reads return undefined like JavaScript instead of throwing:
+// an absent key on a plain object and an out-of-range or negative index on an
+// array or string. The member allow-list still applies to named members.
+assert.equal(await evaluateSource("export function solve(input) { return input.name; }", { x: 1 }), null, "missing object key must read undefined");
+assert.equal(await evaluateSource("export function solve(input) { return input[-1]; }", [1, 2]), null, "negative array index must read undefined");
+assert.equal(await evaluateSource("export function solve(input) { return input[99]; }", [1, 2]), null, "out-of-range index must read undefined");
+assert.equal(await evaluateSource("export function solve(input) { return input[-1]; }", "abc"), null, "negative string index must read undefined");
+assert.equal(await evaluateSource("export function solve(input) { return input.missing ?? 7; }", {}), 7, "undefined misses must chain with ??");
+await assert.rejects(
+  evaluateSource("export function solve(input) { return input.push; }", [1]),
+  /not in the grammar/,
+  "the member allow-list still rejects non-listed names",
+);
+
 // A wedged evaluation - model work the event loop cannot interrupt, like a
 // backtracking regex - must be SIGKILLed with its process: the task fails
 // cleanly, no mutants are credited as killed, the parent's CPU returns to
