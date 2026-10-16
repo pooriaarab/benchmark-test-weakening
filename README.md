@@ -12,10 +12,15 @@ npx benchmark-test-weakening run --model offline --provider mock
 
 ```text
 # Test Weakening
-- Model: mock:1
-- Score: 20.0%
+
+- Model: `mock:1`
+- Score: **20.0%**
 - 95% CI: 6.7%–33.3%
 - Tasks: 30
+
+| Task | Score | Reason |
+| ... | ... | ... |
+
 Shield breakdown: mean ratio 0.86; mutants killed 145/180 by final suites, 170/180 by originals; flags: removedTests=24 loosenedAssertions=24
 ```
 
@@ -209,7 +214,7 @@ The modules were written for this benchmark and licensed MIT. No third-party tes
 
 ## Status
 
-Version 0.1.0 is alpha. Task syntax and heuristics can change before 1.0. Report defects through the [GitHub issue tracker](https://github.com/pooriaarab/benchmark-test-weakening/issues).
+Version 0.2.0 is alpha. Task syntax and heuristics can change before 1.0. Report defects through the [GitHub issue tracker](https://github.com/pooriaarab/benchmark-test-weakening/issues).
 
 There is no public leaderboard yet. No public case studies have been published.
 
