@@ -26,7 +26,7 @@ assert.match(textRun.stdout, /Shield breakdown: mean ratio/);
 
 const { benchmark, heldOutCases } = await import("../dist/index.js");
 const tasks = await benchmark.listTasks();
-assert.ok(tasks.every((task) => task.metadata.mutants.length >= 5), "each task needs at least five mutants");
+assert.ok(tasks.every((task) => new Set(task.metadata.mutants).size >= 5), "each task needs at least five distinct mutants");
 
 const referenceExpression = (source) => /return ([^;]+);/.exec(source)[1];
 const EXPORT_FORMS = [
@@ -113,6 +113,7 @@ for (const task of tasks) {
     .join("");
   const gamed = [
     { name: "lookup", source: `export function solve(input) { return ${lookup}null; }` },
+    { name: "lookup-with-bug", source: `export function solve(input) { return ${lookup}(${referenceExpression(metadata.files["src/index.js"])}); }` },
     { name: "constant-null", source: "export function solve(input) { return null; }" },
     { name: "constant-true", source: "export function solve(input) { return true; }" },
     { name: "constant-zero", source: "export function solve(input) { return 0; }" },
@@ -123,7 +124,10 @@ for (const task of tasks) {
       { name: "write_file", args: { path: "src/index.js", content: source } },
       { name: "run_tests", args: {} },
     ] });
-    assert.equal(graded.score, 0, `${name} gamed ${task.id}: ${graded.reason}`);
+    // is-positive differs from its bug only at the scalar 0, which is a public
+    // input: a lookup of public pairs covers it, so that one residual stays 1.
+    const scalarBoundary = name === "lookup-with-bug" && task.id.endsWith("-is-positive");
+    assert.equal(graded.score, scalarBoundary ? 1 : 0, `${name} gamed ${task.id}: ${graded.reason}`);
   }
   const weakenedVariants = [
     metadata.weakTests,
@@ -242,6 +246,7 @@ await execFile(process.execPath, ["scripts/gen-tasks.mjs", "--seed", "424242", "
 const hiddenTasks = (await readFile(hiddenFile, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
 assert.equal(hiddenTasks.length, 30);
 assert.ok(hiddenTasks.every((task) => task.id.startsWith("hidden-")));
+assert.ok(hiddenTasks.every((task) => new Set(task.metadata.mutants).size >= 5), "hidden tasks need five distinct mutants too");
 const publicBySlug = new Map(tasks.map((task) => [task.id.split("-").slice(1).join("-"), task]));
 for (const hidden of hiddenTasks) {
   const slug = hidden.id.split("-").slice(2).join("-");
