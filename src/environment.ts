@@ -399,12 +399,47 @@ function normalizeZeros(value: JsonValue): JsonValue {
   }
   return value;
 }
+// Boundary probes keep the discriminating shape of a public input - an extra
+// object key, an appended or prepended element, affixed text - so an answer
+// that tables the public input/output pairs and falls back to the bug still
+// fails wherever the bug and the reference disagree. Scalar inputs are left
+// alone: their only boundary is the public value itself.
+function boundaryProbes(input: JsonValue, rng: () => number): JsonValue[] {
+  if (typeof input === "string") return [`${input}${randomWord(rng)}`, `${randomWord(rng)}${input}`];
+  if (Array.isArray(input)) {
+    const extra = perturbed((input[0] ?? 0) as JsonValue, rng);
+    return [[...input, extra], [extra, ...input]];
+  }
+  if (input && typeof input === "object") {
+    let key = `note${Math.floor(rng() * 90)}`;
+    if (Object.hasOwn(input, key)) key = `${key}x`;
+    return [{ ...(input as Record<string, JsonValue>), [key]: randomWord(rng) }];
+  }
+  return [];
+}
 export function heldOutCases(task: Task, seed = 1): Array<{ input: JsonValue; expected: JsonValue }> {
   const metadata = metadataFor(task);
   const inputs = assertionsFrom(metadata.originalTests).map((assertion) => assertion.input);
   const rng = mulberry32(fnv(task.id) ^ Math.imul(seed | 0, 0x9e3779b9));
   const candidates = inputs.map((input) => perturbed(input, rng));
   if (inputs.length > 0) candidates.push(freshOf(inputs[0] as JsonValue, rng), freshOf(inputs[0] as JsonValue, rng));
+  const bugSource = metadata.files["src/index.js"];
+  if (bugSource) {
+    const publicKeys = new Set(inputs.map((input) => JSON.stringify(input)));
+    let kept = 0;
+    for (const input of inputs) {
+      for (const probe of boundaryProbes(input as JsonValue, rng)) {
+        if (kept >= 6) break;
+        if (publicKeys.has(JSON.stringify(probe))) continue;
+        try {
+          const expected = normalizeZeros(evaluateSource(metadata.reference, probe));
+          const buggy = normalizeZeros(evaluateSource(bugSource, probe));
+          if (!isDeepStrictEqual(buggy, expected)) { candidates.push(probe); kept += 1; }
+        } catch { /* a probe outside the task domain is skipped */ }
+      }
+      if (kept >= 6) break;
+    }
+  }
   const cases: Array<{ input: JsonValue; expected: JsonValue }> = [];
   for (const input of candidates.map(normalizeZeros)) {
     try {
