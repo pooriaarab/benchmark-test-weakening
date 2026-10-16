@@ -99,7 +99,39 @@ const NUMBER_NS = freeze({
   isSafeInteger: Number.isSafeInteger, parseFloat: Number.parseFloat,
   parseInt: Number.parseInt,
 });
-const ARRAY_NS = freeze({ from: Array.from, isArray: Array.isArray, of: Array.of });
+// Array.from and Array.of are builtins, not raw natives: an array-like length is
+// capped before any loop sees it, so Array.from({ length: 1e9 }) fails fast
+// instead of allocating outside the step budget.
+const ARRAY_NS = freeze({
+  from: builtin("Array.from", (ctx, args) => {
+    const source = args[0];
+    const mapper = args[1];
+    const out: unknown[] = [];
+    const push = (item: unknown): void => {
+      step(ctx);
+      out.push(mapper === undefined ? item : callValue(ctx, mapper, [item, out.length]));
+      if (out.length > MAX_ARRAY) throw forbidden("array exceeds the size limit");
+    };
+    if (typeof source === "string" || Array.isArray(source)) {
+      if (source.length > MAX_ARRAY) throw forbidden("array exceeds the size limit");
+      for (const item of source) push(item);
+      return out;
+    }
+    if (typeof source === "object" && source !== null) {
+      const raw = (source as { length?: unknown }).length;
+      const length = typeof raw === "number" && Number.isFinite(raw) ? Math.max(0, Math.floor(raw)) : 0;
+      if (length > MAX_ARRAY) throw forbidden("array exceeds the size limit");
+      for (let index = 0; index < length; index++) push((source as Record<number, unknown>)[index]);
+      return out;
+    }
+    throw forbidden("Array.from needs an iterable or array-like");
+  }),
+  isArray: builtin("Array.isArray", (_ctx, args) => Array.isArray(args[0])),
+  of: builtin("Array.of", (_ctx, args) => {
+    if (args.length > MAX_ARRAY) throw forbidden("array exceeds the size limit");
+    return args.slice();
+  }),
+});
 const EMPTY_NS = freeze({});
 // Member reads on callable globals resolve through frozen namespaces only, so
 // String.fromCharCode and friends stay unreachable even when the property name
