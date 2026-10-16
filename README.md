@@ -24,7 +24,7 @@ npx benchmark-test-weakening run --model offline --provider mock
 Shield breakdown: mean ratio 0.86; mutants killed 145/180 by final suites, 170/180 by originals; flags: removedTests=24 loosenedAssertions=24
 ```
 
-The mock score is a wiring check, not a model result. The frozen repositories come from the committed seed `20261015` under the MIT license.
+The task table is abridged. The mock score is a wiring check, not a model result. The frozen repositories come from the committed seed `20261015` under the MIT license.
 
 ## Security
 
