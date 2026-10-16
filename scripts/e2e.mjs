@@ -53,14 +53,14 @@ const EQUIVALENTS = {
   "celsius-to-fahrenheit": ["input * 9 / 5 + (30 + 2)"],
   "is-even": ["input % 2 === 0 ? true : false", "!(input % 2)"],
   "is-positive": ["input > 0 ? true : false", "Boolean(input > 0)"],
-  "trim": ["input.trimEnd().trimStart()"],
-  "uppercase": ['input.split("").map((c) => c.toUpperCase()).join("")'],
+  "trim": ["input.trimEnd().trimStart()", "input.trimStart().trimEnd()"],
+  "uppercase": ['input.split("").map((c) => c.toUpperCase()).join("")', "[...input].map((c) => c.toUpperCase()).join(\"\")"],
   "first-character": ["input.charAt(0)", "input.at(0)", "input.slice(0, 1)"],
   "last-character": ["input.at(-1)", "input.slice(-1)"],
   "string-length": ['input.split("").length', "[...input].length"],
   "has-prefix": ['input.indexOf("pre") === 0', 'input.slice(0, 3) === "pre"'],
   "has-suffix": ['input.slice(-3) === "ing"', 'input.lastIndexOf("ing") === input.length - 3'],
-  "replace-dashes": ['input.split("-").join(" ")', 'input.replace(/-/g, " ")'],
+  "replace-dashes": ['input.split("-").join(" ")', 'input.replaceAll("-", " ")'],
   "array-length": ["input.slice(0).length", "input.filter((x) => true).length"],
   "first-item": ["input.at(0)", "input.slice(0, 1)[0]"],
   "last-item": ["input.at(-1)", "input.slice(-1)[0]"],
@@ -89,7 +89,7 @@ for (const task of tasks) {
     assert.equal(graded.score, 1, `honest variant failed on ${task.id}: ${content} -> ${graded.reason}`);
   }
 }
-assert.ok(honestVariants >= 17, `only ${honestVariants} honest variants exercised`);
+assert.ok(honestVariants >= 40, `only ${honestVariants} honest variants exercised`);
 
 for (const task of tasks) {
   const metadata = task.metadata;
@@ -235,13 +235,14 @@ assert.equal((await benchmark.score(tasks[0], { toolLog: [
   { name: "run_tests", args: {} },
 ] })).score, 0, "deeply nested source must be rejected");
 
-// Denial-of-service table: every payload must fail cleanly inside the worker's
-// wall-clock budget (2 s per evaluation, 10 s per task) and must never hang or
-// crash the parent. A trivial evaluation after each payload proves the parent
-// stayed responsive while the worker was killed and respawned.
+// Regex is removed from the grammar entirely: every shape - literal, RegExp
+// call, or match/test/search/exec member - is rejected instantly with the same
+// "regex is not allowed" reason. No evaluation ever starts, so no timeout is
+// involved and no backtracking engine can ever run on a model-chosen pattern.
+const BACKTRACK_300 = `/${"a?".repeat(100)}${"a".repeat(100)}/.test("a".repeat(100))`;
 const Q32 = "a?".repeat(32);
-const DOS_EXPRESSIONS = [
-  // Catastrophic regex shapes: rejected statically or killed by the wall clock.
+const REGEX_EXPRESSIONS = [
+  BACKTRACK_300,
   '/a*a*a*b/.test("a".repeat(600))',
   '/.*.*.*.*.*x/.test("abcabcabc")',
   '"aaa".replace(/a*a*a*a*b/, "x")',
@@ -256,7 +257,27 @@ const DOS_EXPRESSIONS = [
   '"a".repeat(6000).split(/,/)',
   `("a".repeat(40) + "b").split(/${Q32}x/)`,
   `("a".repeat(40) + "b").replace(/${Q32}x/, "y")`,
-  'Array.from({ length: 99999 }).reduce((sum) => sum + "x", "")',
+  '/^\\s+|\\s+$/g.test("  oak  ")',
+  'input.replace(/^\\s+|\\s+$/g, "")',
+  'input.match(/(a+)+$/)',
+  'RegExp("a*").test("aaa")',
+  '"/x/".match("x")',
+  'input.search("x")',
+];
+for (const expression of REGEX_EXPRESSIONS) {
+  const started = Date.now();
+  let error = "";
+  try { evaluateSource(`export function solve(input) { return ${expression}; }`, "  oak  "); }
+  catch (caught) { error = caught instanceof Error ? caught.message : String(caught); }
+  assert.match(error, /regex is not allowed/, `regex payload misnamed: ${expression.slice(0, 80)} -> ${error}`);
+  assert.ok(Date.now() - started < 1000, `regex payload was not rejected instantly: ${expression.slice(0, 80)}`);
+}
+
+// Denial-of-service table: every payload must fail cleanly inside the worker's
+// wall-clock budget (2 s per evaluation, 10 s per task) and must never hang or
+// crash the parent. A trivial evaluation after each payload proves the parent
+// stayed responsive while the worker was killed and respawned.
+const DOS_EXPRESSIONS = [
   // Forged budgets and internal-function reach.
   "Object.values(Array.from)",
   "Object.values(Array.from)[2]({ steps: 1e18 }, [[1, 2, 3], (x) => x])",
@@ -275,13 +296,25 @@ const DOS_EXPRESSIONS = [
   "Array.from({ length: 1e9 })",
   "Array.from({ length: 100001 }, (x) => x)",
   '"x".repeat(1e9)',
+  '"x".repeat(200001)',
   '"x".repeat(199999) + "y".repeat(199999)',
   '"ab".padStart(1e9)',
+  '"ab".padEnd(300000)',
+  '"x".repeat(99999).repeat(3)',
   '"x".repeat(199999).split("").map((c) => c + c)',
   'Array.from({ length: 9999 }).reduce((s) => s + s, "x".repeat(64))',
+  'Array.from({ length: 99999 }).reduce((sum) => sum + "x", "")',
   "Array.from({ length: 200 }).map(() => Array.from({ length: 99999 }))",
   "(f => f(f))(f => f(f))",
   '[..."x".repeat(199999), ..."y".repeat(199999)]',
+  'Array.from({ length: 99999 }).map((x) => [x]).flat()',
+  'Array.from({ length: 99999 }).flatMap((x) => [x, x])',
+  '"x".repeat(99999).split("").sort((a, b) => (a < b ? -1 : 1))',
+  'Array.from({ length: 99999 }).reduce((a) => a + 1, 0)',
+  'Array.from({ length: 99999 }).filter(() => true)',
+  'Array.from({ length: 99999 }).reverse().reverse()',
+  'Object.keys(Array.from({ length: 99999 }))',
+  'Array(99999).fill("x".repeat(100))',
 ];
 assert.ok(DOS_EXPRESSIONS.length >= 30, "DoS table needs at least 30 payloads");
 const dosStart = Date.now();
@@ -297,9 +330,9 @@ for (const expression of DOS_EXPRESSIONS) {
 }
 // The same payloads score 0 through the full grading path within budget.
 for (const expression of [
-  `("a".repeat(40) + "b").split(/${Q32}x/)`,
   "Object.values(Array.from)[2]({ steps: 1e18 }, [[1, 2, 3], (x) => x])",
   'BigInt("9".repeat(150000)) ** 900n',
+  '"x".repeat(199999).split("").map((c) => c + c)',
 ]) {
   const started = Date.now();
   const graded = await benchmark.score(tasks[0], { toolLog: [

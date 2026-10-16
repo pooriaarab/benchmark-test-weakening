@@ -18,8 +18,6 @@ const STEP_BUDGET = 200_000;
 const MAX_OUTPUT = 100_000;
 const MAX_STRING = 200_000;
 const MAX_ARRAY = 100_000;
-const MAX_REGEX_SOURCE = 300;
-const MAX_REGEX_INPUT = 5_000;
 
 // Ctx, Closure, and Builtin are real classes whose internals live in private
 // fields. A model-built `{ steps: 1e18 }` or `{ kind: "builtin", call: f }` is
@@ -99,7 +97,11 @@ const ARRAY_METHODS = new Set(
   "at concat every filter find findIndex findLast flat flatMap forEach includes indexOf join lastIndexOf map reduce reduceRight reverse slice some sort toReversed toSorted toSpliced with".split(" "),
 );
 const NUMBER_METHODS = new Set(["toExponential", "toFixed", "toPrecision", "toString"]);
-const REGEXP_METHODS = new Set(["exec", "test"]);
+// Member names that only exist for regex work. Regular expressions are outside
+// the grammar entirely - no literals, no RegExp, no match/test/search/exec -
+// because no static rule can bound a backtracking engine on a model-chosen
+// pattern, so these get a clearer rejection than the generic property error.
+const REGEX_ONLY = new Set(["exec", "match", "matchAll", "search", "test"]);
 
 const freeze = (entries: Record<string, unknown>) => Object.freeze({ ...entries });
 const MATH = freeze(Object.fromEntries(
@@ -116,6 +118,8 @@ const objectInspection = (fn: (value: never) => unknown) => (value: unknown) => 
   }
   return fn(value as never);
 };
+// RegExp cannot be constructed in the grammar; the instanceof checks below only
+// defend against a future grammar change leaking one back in.
 const OBJECT_NS = freeze({
   entries: objectInspection(Object.entries as (value: never) => unknown),
   fromEntries: objectInspection(Object.fromEntries as (value: never) => unknown),
@@ -182,19 +186,14 @@ function guardResult(value: unknown): unknown {
 function method(name: string, receiver: unknown): Builtin {
   return builtin(name, (ctx, args) => {
     step(ctx);
-    if (receiver instanceof RegExp && String(args[0] ?? "").length > MAX_REGEX_INPUT) {
-      throw forbidden("regex input exceeds the size limit");
+    if (args.some((arg) => arg instanceof RegExp) || receiver instanceof RegExp) {
+      throw forbidden("regex is not allowed");
     }
     if (typeof receiver === "string" && (name === "repeat" || name === "padStart" || name === "padEnd")) {
       const fill = String(args[1] ?? " ");
       if ((Number(args[0]) || 0) * Math.max(1, fill.length) + receiver.length > MAX_STRING) {
         throw forbidden("string result exceeds the size limit");
       }
-    }
-    if (typeof receiver === "string" && receiver.length > MAX_REGEX_INPUT
-      && (name === "replace" || name === "replaceAll" || name === "split")
-      && args.some((arg) => arg instanceof RegExp)) {
-      throw forbidden("regex input exceeds the size limit");
     }
     const fn = (receiver as Record<string, unknown>)[name] as (...a: unknown[]) => unknown;
     const mapped = args.map((arg) => (isCallable(arg) ? (...a: unknown[]) => callValue(ctx, arg, a) : arg));
@@ -211,8 +210,9 @@ function getProperty(ctx: Ctx, object: unknown, key: unknown): unknown {
   const name = typeof key === "number" ? String(key) : key;
   if (typeof name !== "string") throw forbidden("member keys must be strings or numbers");
   const pick = (label: string, allowed: ReadonlySet<string>): Builtin => {
-    if (!allowed.has(name)) throw forbidden(`property is not in the grammar: ${label}.${name}`);
-    return method(name, object);
+    if (allowed.has(name)) return method(name, object);
+    if (REGEX_ONLY.has(name)) throw forbidden("regex is not allowed");
+    throw forbidden(`property is not in the grammar: ${label}.${name}`);
   };
   if (typeof object === "string") {
     if (name === "length") return object.length;
@@ -226,7 +226,7 @@ function getProperty(ctx: Ctx, object: unknown, key: unknown): unknown {
     return pick("Array", ARRAY_METHODS);
   }
   if (typeof object === "number") return pick("Number", NUMBER_METHODS);
-  if (object instanceof RegExp) return pick("RegExp", REGEXP_METHODS);
+  if (object instanceof RegExp) throw forbidden("regex is not allowed");
   if (isCallable(object)) {
     const ns = object instanceof Builtin ? BUILTIN_NS[object.name] ?? EMPTY_NS : EMPTY_NS;
     if (Object.hasOwn(ns, name)) return (ns as Record<string, unknown>)[name];
@@ -244,25 +244,8 @@ class ShortCircuit extends Error {
 }
 const shortCircuit = () => new ShortCircuit();
 
-function checkRegex(source: string, flags: string): RegExp {
-  if (source.length > MAX_REGEX_SOURCE) throw forbidden("regex source exceeds the size limit");
-  if (!/^[dgimsuvy]*$/.test(flags)) throw forbidden(`regex flag is not in the grammar: ${flags}`);
-  const stripped = source.replace(/\\./g, "..").replace(/\[[^\]]*\]/g, "[]");
-  // Two or more unbounded quantifiers is the catastrophic-backtracking shape;
-  // the wall-clock kill in the sandbox still bounds whatever slips through.
-  const unbounded = (stripped.match(/[*+]|\{\d+,\}/g) ?? []).length;
-  if (/\\[1-9]/.test(source) || /\(\?/.test(stripped) || /\)[+*?{]/.test(stripped) || unbounded >= 2) {
-    throw forbidden("regex is outside the safe subset");
-  }
-  try {
-    return new RegExp(source, flags);
-  } catch (error) {
-    throw forbidden(`invalid regex: ${error instanceof Error ? error.message : String(error)}`);
-  }
-}
-
 const INSTANCEOF: Record<string, (value: unknown) => boolean> = {
-  Array: Array.isArray, RegExp: (value) => value instanceof RegExp,
+  Array: Array.isArray,
   String: (value) => typeof value === "string", Number: (value) => typeof value === "number",
   Boolean: (value) => typeof value === "boolean",
   Symbol: (value) => typeof value === "symbol",
@@ -282,7 +265,6 @@ const GLOBAL_SCOPE = new Scope();
       }
       return Array(...(args as number[]));
     }),
-    RegExp: builtin("RegExp", (_ctx, args) => checkRegex(String(args[0] ?? ""), String(args[1] ?? ""))),
     parseInt: builtin("parseInt", (_ctx, args) => Number.parseInt(String(args[0]), args[1] as number | undefined)),
     parseFloat: builtin("parseFloat", (_ctx, args) => Number.parseFloat(String(args[0]))),
     isNaN: builtin("isNaN", (_ctx, args) => Number.isNaN(Number(args[0]))),
@@ -355,10 +337,7 @@ function evaluate(ctx: Ctx, scope: Scope, node: Ast): unknown {
   try {
     switch (node.type) {
       case "Literal": {
-        if (node.regex) {
-          const regex = node.regex as { pattern: string; flags: string };
-          return checkRegex(regex.pattern, regex.flags);
-        }
+        if (node.regex) throw forbidden("regex is not allowed");
         if (typeof node.bigint === "string") throw forbidden("bigint literals are not in the grammar");
         return node.value;
       }
@@ -409,6 +388,7 @@ function evaluate(ctx: Ctx, scope: Scope, node: Ast): unknown {
           if (typeof right === "object" && right !== null && !isCallable(right) && !(right instanceof RegExp)) {
             return Object.hasOwn(right, String(left));
           }
+          if (right instanceof RegExp) throw forbidden("regex is not allowed");
           throw forbidden("in needs an object on the right");
         }
         if (op === "instanceof") {

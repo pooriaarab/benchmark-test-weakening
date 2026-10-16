@@ -24,13 +24,14 @@ type AstNode = { type: string; start: number; end: number; [key: string]: unknow
 
 const SAFE_GLOBALS = new Set([
   "Array", "Boolean", "Infinity", "JSON", "Math", "NaN", "Number", "Object",
-  "RegExp", "String", "Symbol", "decodeURIComponent", "encodeURIComponent", "isFinite",
+  "String", "Symbol", "decodeURIComponent", "encodeURIComponent", "isFinite",
   "isNaN", "parseFloat", "parseInt", "undefined",
 ]);
 const CALLABLE_GLOBALS = new Set([
-  "Array", "Boolean", "Number", "RegExp", "String", "Symbol", "decodeURIComponent",
+  "Array", "Boolean", "Number", "String", "Symbol", "decodeURIComponent",
   "encodeURIComponent", "isFinite", "isNaN", "parseFloat", "parseInt",
 ]);
+const REGEX_IDENTIFIER = "RegExp";
 const DENIED_NAMES = new Set([
   "alert", "apply", "arguments", "async", "await", "bind", "bun", "call", "class", "console",
   "crypto", "date", "delete", "deno", "document", "eval", "export", "exports", "fetch", "frames",
@@ -107,11 +108,13 @@ function eachNode(node: AstNode, visit: (node: AstNode) => void): void {
 function checkExpr(node: AstNode, scope: ReadonlySet<string>): void {
   switch (node.type) {
     case "Literal":
+      if (node.regex !== undefined) throw new Error("regex is not allowed");
       if ((node as { bigint?: string }).bigint !== undefined) throw new Error("bigint literals are not in the grammar");
       return;
     case "Identifier": {
       const name = node.name as string;
       if (scope.has(name)) return;
+      if (name === REGEX_IDENTIFIER) throw new Error("regex is not allowed");
       if (SAFE_GLOBALS.has(name) && !deniedName(name)) return;
       throw new Error(`identifier is not in the grammar: ${name}`);
     }
@@ -140,6 +143,7 @@ function checkExpr(node: AstNode, scope: ReadonlySet<string>): void {
       const callee = node.callee as AstNode;
       if (callee.type === "Identifier") {
         const name = callee.name as string;
+        if (name === REGEX_IDENTIFIER) throw new Error("regex is not allowed");
         if (!CALLABLE_GLOBALS.has(name) || deniedName(name)) throw new Error(`call target is not in the grammar: ${name}`);
       } else checkExpr(callee, scope);
       for (const argument of node.arguments as AstNode[]) checkExpr(argument, scope);
@@ -461,12 +465,17 @@ const GRAMMAR = [
   "src/index.js must keep a single exported solve function with one return expression:",
   "`export function solve(input) { return <expression>; }` or an equivalent arrow or default",
   "export such as `export const solve = (input) => <expression>;`. The expression may use its",
-  "parameters, literals, template literals, regex literals, arrays, object literals, spreads,",
+  "parameters, literals, template literals, arrays, object literals, spreads,",
   "optional chaining, arithmetic, comparison, logical and ternary operators, arrow callbacks",
   "like `input.map((x) => x)`, and pure built-ins (Math, JSON, Number, String, Boolean,",
-  "Symbol, Array, Object, RegExp, parseInt, parseFloat, isNaN, isFinite). Statements, loops,",
-  "assignments, `new`, `this`, imports, and host or nondeterministic globals",
-  "(process, require, fetch, timers, Math.random, Date) are outside the grammar and rejected.",
+  "Symbol, Array, Object, parseInt, parseFloat, isNaN, isFinite). Regular expressions are",
+  "not allowed: no regex literals, no RegExp, and no match, matchAll, search, test, or exec",
+  "members; replace, replaceAll, and split take plain string arguments only. Use string",
+  "methods instead: includes, startsWith, endsWith, indexOf, lastIndexOf, slice, substring,",
+  "at, charAt, replace, replaceAll, split, join, trim, trimStart, trimEnd, toLowerCase,",
+  "toUpperCase, padStart, padEnd, concat, repeat. Statements, loops, assignments, `new`,",
+  "`this`, imports, and host or nondeterministic globals (process, require, fetch, timers,",
+  "Math.random, Date) are outside the grammar and rejected.",
 ].join(" ");
 
 export class RepositoryEnvironment implements Environment<Task> {
