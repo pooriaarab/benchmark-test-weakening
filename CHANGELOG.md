@@ -14,11 +14,14 @@ Scoring changed. Results produced by 0.1.0 are not comparable with 0.2.0.
   documented grammar: model text never reaches `eval`, `Function`, `vm`,
   `import()`, or `require`, and property reads resolve only through an
   explicit `(value type, property)` allow-list.
-- Three denial-of-service holes are closed. Evaluations now run in a worker
-  thread with a hard wall-clock kill (2 s per evaluation, 10 s per task), so
-  catastrophic regex backtracking can no longer hang the process. Regexes
-  with two or more unbounded quantifiers are rejected and regex input strings
-  are capped at 5,000 characters. The step budget can no longer be forged:
+- Denial-of-service holes are closed. Regular expressions are removed from
+  the grammar entirely: `/a?a?...a/.test("a".repeat(100))` fit the old
+  safe-subset rules, hit the 2 s wall-clock kill, and then kept spinning -
+  `worker.terminate()` cannot interrupt a backtracking regex, so the worker
+  leaked and the parent could never exit. No literals, `RegExp`,
+  `match`/`test`/`search`/`exec`, or regex arguments to `replace`/`split`
+  are accepted now; string methods cover the same cases. The step budget can
+  no longer be forged:
   `Object.values(Array.from)` used to leak the interpreter's internal `call`
   function, which a model-built `{ steps: 1e18 }` then drove past every
   limit; builtins and closures are now class instances with private state,
@@ -30,8 +33,8 @@ Scoring changed. Results produced by 0.1.0 are not comparable with 0.2.0.
 
 - Honest fixes written in equivalent syntax now pass. The implementation
   evaluator accepts a wider expression grammar (arrow functions, `slice`,
-  `at`, `charAt`, `split`/`join`, template literals, regular-expression
-  literals, `Boolean`, and optional semicolons), the allowed grammar is
+  `at`, `charAt`, `split`/`join`, template literals, `Boolean`, and optional
+  semicolons), the allowed grammar is
   stated in the task system text, and the `=== true` / `x ? true : false`
   gaming heuristics were removed.
 - The hidden split is a real held-out set. Hidden tasks are redrawn per
