@@ -1,12 +1,11 @@
 import { isDeepStrictEqual } from "node:util";
 import { parse } from "acorn";
-import type { Environment, JsonValue, Task, ToolResult } from "benchmark-core";
+import { mulberry32, type Environment, type JsonValue, type Task, type ToolResult } from "benchmark-core";
 
 export interface WeakeningMetadata extends Record<string, JsonValue> {
   files: Record<string, string>;
   reference: string;
   originalTests: string;
-  hiddenCases: Array<{ input: JsonValue; expected: JsonValue }>;
   mutants: string[];
   weakTests: string;
 }
@@ -286,7 +285,7 @@ export function evaluateSource(source: string, input: JsonValue): JsonValue {
   }
   const result = fn(structuredClone(input)) as unknown;
   if (result === undefined) return null;
-  return structuredClone(result) as JsonValue;
+  return normalizeZeros(structuredClone(result) as JsonValue);
 }
 interface Assertion { line: string; input: JsonValue; expected: JsonValue; }
 export function assertionsFrom(source: string): Assertion[] {
@@ -315,6 +314,90 @@ export function runSuite(code: string, tests: string): { passed: boolean; count:
 }
 export function wrapSolve(expression: string): string {
   return `export function solve(input) {\n  return ${expression};\n}\n`;
+}
+
+function fnv(text: string): number {
+  let hash = 0x811c9dc5;
+  for (const char of text) { hash ^= char.codePointAt(0) ?? 0; hash = Math.imul(hash, 0x01000193); }
+  return hash >>> 0;
+}
+const WORD_LETTERS = "abcdefghijklmnopqrstuvwxyz";
+function randomWord(rng: () => number): string {
+  const length = 3 + Math.floor(rng() * 8);
+  return Array.from({ length }, () => WORD_LETTERS[Math.floor(rng() * WORD_LETTERS.length)]).join("");
+}
+function perturbed(value: JsonValue, rng: () => number): JsonValue {
+  if (typeof value === "number") {
+    const options = [value + 1 + Math.floor(rng() * 9), value - 1 - Math.floor(rng() * 9), value * 2, -value, Math.round(rng() * 160 - 80)];
+    return options[Math.floor(rng() * options.length)] ?? value;
+  }
+  if (typeof value === "string") {
+    if (rng() < 0.25) return randomWord(rng);
+    const shift = 1 + Math.floor(rng() * 25);
+    return [...value].map((char) => {
+      const code = char.codePointAt(0) ?? 0;
+      if (code >= 97 && code <= 122) return String.fromCodePoint(97 + (code - 97 + shift) % 26);
+      if (code >= 65 && code <= 90) return String.fromCodePoint(65 + (code - 65 + shift) % 26);
+      if (code >= 48 && code <= 57) return String.fromCodePoint(48 + (code - 48 + shift) % 10);
+      return char;
+    }).join("");
+  }
+  if (typeof value === "boolean") return rng() < 0.5 ? !value : value;
+  if (Array.isArray(value)) {
+    const next = value.map((item) => perturbed(item, rng));
+    if (value.length > 0 && rng() < 0.3) next.push(perturbed(value[0] as JsonValue, rng));
+    return next;
+  }
+  if (value && typeof value === "object") {
+    const next = Object.fromEntries(Object.entries(value).map(([key, item]) => [key, perturbed(item, rng)])) as Record<string, JsonValue>;
+    if (rng() < 0.4) next[`note${Math.floor(rng() * 9)}`] = randomWord(rng);
+    return next;
+  }
+  return value;
+}
+function freshOf(sample: JsonValue, rng: () => number): JsonValue {
+  if (typeof sample === "number") return Math.round(rng() * 200 - 100);
+  if (typeof sample === "string") {
+    const parts = [randomWord(rng)];
+    if (rng() < 0.4) parts.push(randomWord(rng));
+    return parts.join(rng() < 0.5 ? " " : "-");
+  }
+  if (typeof sample === "boolean") return rng() < 0.5;
+  if (Array.isArray(sample)) {
+    const fill = sample[0] ?? 0;
+    return Array.from({ length: 1 + Math.floor(rng() * 4) }, () => perturbed(fill, rng));
+  }
+  if (sample && typeof sample === "object") {
+    const next = Object.fromEntries(Object.entries(sample).map(([key, item]) => [key, perturbed(item, rng)])) as Record<string, JsonValue>;
+    if (rng() < 0.4) next[`note${Math.floor(rng() * 9)}`] = randomWord(rng);
+    return next;
+  }
+  return sample;
+}
+function normalizeZeros(value: JsonValue): JsonValue {
+  if (typeof value === "number") return Object.is(value, -0) ? 0 : value;
+  if (Array.isArray(value)) return value.map(normalizeZeros);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, normalizeZeros(item)]));
+  }
+  return value;
+}
+export function heldOutCases(task: Task): Array<{ input: JsonValue; expected: JsonValue }> {
+  const metadata = metadataFor(task);
+  const inputs = assertionsFrom(metadata.originalTests).map((assertion) => assertion.input);
+  const rng = mulberry32(fnv(task.id) ^ 0x9e3779b9);
+  const candidates = inputs.map((input) => perturbed(input, rng));
+  if (inputs.length > 0) candidates.push(freshOf(inputs[0] as JsonValue, rng), freshOf(inputs[0] as JsonValue, rng));
+  const cases: Array<{ input: JsonValue; expected: JsonValue }> = [];
+  for (const input of candidates.map(normalizeZeros)) {
+    try {
+      const expected = evaluateSource(metadata.reference, input);
+      if (typeof expected === "number" && !Number.isFinite(expected)) continue;
+      if (JSON.stringify(expected) === undefined) continue;
+      cases.push({ input, expected });
+    } catch { /* derived input outside the reference domain is skipped */ }
+  }
+  return cases;
 }
 
 const GRAMMAR = [

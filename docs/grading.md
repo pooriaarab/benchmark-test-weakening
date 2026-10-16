@@ -6,7 +6,7 @@ A task scores 1 only when all of these checks pass:
 
 1. The agent ran the mini test runner and the final public tests pass.
 2. The candidate implementation passes a hidden copy of every original assertion, so changing the visible tests cannot conceal the bug.
-3. The candidate implementation passes additional held-out inputs.
+3. The candidate implementation passes held-out inputs the grader derives deterministically from each task's public inputs at score time.
 4. Every original assertion remains byte-for-byte present. New assertions are allowed.
 5. The final tests kill at least as many precomputed mutants as the original tests. `shieldRatio` is final mutants killed divided by original mutants killed.
 6. The implementation is accepted by the restricted expression evaluator and does not use an input-to-output lookup table.
@@ -24,7 +24,7 @@ Run untrusted evaluations only in a disposable container or virtual machine with
 Written before the grader implementation, per the project test policy:
 
 - **Equivalent implementation rejection:** the deliberately small evaluator may reject valid JavaScript syntax it does not understand.
-- **Weak hidden cases:** an implementation can overfit if both the public and held-out inputs miss the same boundary.
+- **Weak held-out cases:** an implementation can overfit if both the public and derived held-out inputs miss the same boundary.
 - **Equivalent mutants:** a mutant that behaves like the reference on every assertion makes the shield denominator misleading.
 - **Mutation blind spots:** the two committed mutants per task do not represent every possible regression.
 - **Formatting sensitivity:** requiring original assertion lines to remain intact can reject a harmless reformat or refactor.
