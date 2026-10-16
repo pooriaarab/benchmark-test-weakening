@@ -1,6 +1,6 @@
 {
   "name": "benchmark-test-weakening",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Coding-agent benchmark that detects test weakening with hidden assertions, held-out cases, and deterministic mutation testing.",
   "keywords": [
     "ai-benchmark",
@@ -70,6 +70,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.20.1",
+    "acorn": "^8.19.0",
     "benchmark-core": "^0.1.0"
   },
   "devDependencies": {
@@ -80,5 +81,8 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "allowScripts": {
+    "esbuild@0.27.7": true
   }
 }
