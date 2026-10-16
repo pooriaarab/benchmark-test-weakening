@@ -28,11 +28,11 @@ The mock score is a wiring check, not a model result. The frozen repositories co
 
 ## Security
 
-The evaluator runs model-written expressions in the benchmark's Node.js process through `Function(...)`. Its syntax whitelist reduces what it accepts, but it is not a sandbox or a security boundary.
+Model-written answers are never evaluated. The runner parses each answer with acorn, whitelists the documented expression grammar, and interprets the syntax tree itself - no `eval`, `Function`, `vm`, `import()`, or `require` ever touches model text. Property reads resolve only through an explicit allow-list of `(value type, property)` pairs, so a member name assembled at run time (`input[String.fromCharCode(...)]`) cannot reach `constructor`, `__proto__`, or any host object. Source length, nesting depth, evaluation steps, and output size are all capped, and every rejection is a clean `forbidden` failure, not a crash.
 
-Run the benchmark only in a disposable container or virtual machine with no secrets and no network access. Never expose `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, or other credentials to a process that evaluates untrusted model output. The `mock` provider uses committed fixtures and is safe.
+This is defense in depth, not a sandbox guarantee. Run the benchmark in a disposable container or virtual machine with no secrets and no network access, and never expose `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, or other credentials to a process that handles untrusted model output. The `mock` provider uses committed fixtures and is safe.
 
-OpenRouter support remains available for controlled development. This direct form puts the key in the evaluator process, so it is unsafe for untrusted output:
+OpenRouter support remains available for controlled development. This direct form puts the key in the process that reads model output, so it is unsafe for untrusted output:
 
 ```bash
 OPENROUTER_API_KEY=your_key npx benchmark-test-weakening run --provider openrouter --model openai/gpt-5
@@ -75,7 +75,7 @@ npx benchmark-test-weakening score report.json
   score, reason, flags, cost, and latency
 ```
 
-The evaluator accepts a small JavaScript expression grammar. It does not execute an arbitrary package or install task dependencies, but accepted expressions still run in-process.
+The evaluator accepts a small JavaScript expression grammar and interprets it instead of compiling it. It does not execute an arbitrary package or install task dependencies.
 
 ## Why it exists
 
@@ -133,7 +133,7 @@ The E2E gate runs all 30 tasks through good and adversarial traces. The heuristi
 import { benchmark, run, score } from "benchmark-test-weakening";
 ```
 
-`run(adapter, options)` evaluates every task; pass `{ tasks: "path/to/tasks.jsonl" }` or a task array in options to run a different split. `score(taskId, trace)` grades one recorded trace without a model call. `withTasks(path)` returns a benchmark bound to a JSONL file, and `handlerForTasks(path)` from `benchmark-test-weakening/api` does the same for the fetch handler.
+`run(adapter, options)` evaluates every task; pass `{ tasks: "path/to/tasks.jsonl" }` or a task array in options to run a different split. `score(taskId, trace, options)` grades one recorded trace without a model call; `options` accepts `tasks` (a JSONL path or task array), `tasksPath`, and `seed` to mirror a run's split and held-out seed. `withTasks(path)` returns a benchmark bound to a JSONL file, and `handlerForTasks(path)` from `benchmark-test-weakening/api` does the same for the fetch handler.
 
 ## CLI
 
@@ -198,7 +198,7 @@ The modules were written for this benchmark and licensed MIT. No third-party tes
 ## Limits
 
 - The public tasks and references can enter model training data.
-- The expression evaluator rejects many valid JavaScript implementations.
+- The expression interpreter rejects many valid JavaScript implementations.
 - A handful of mutants and derived held-out cases cannot prove general correctness.
 - Exact assertion preservation rejects harmless test reformatting.
 - Hard-coded-output and special-case flags are heuristics.
@@ -242,7 +242,7 @@ benchmark-test-weakening isolates test preservation in 30 small synthetic JavaSc
 
 ### Does benchmark-test-weakening run arbitrary JavaScript?
 
-benchmark-test-weakening accepts one exported function with a restricted return expression. The mini runner rejects non-whitelisted identifiers and unsafe syntax before evaluation.
+benchmark-test-weakening accepts one exported function with a restricted return expression. The mini runner whitelists the documented grammar, then interprets the syntax tree without ever evaluating model-written text.
 
 ### Can I use a private split?
 

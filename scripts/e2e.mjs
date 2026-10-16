@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { execFile as execFileCallback, spawn } from "node:child_process";
 import { once } from "node:events";
 import { createServer as createNetServer } from "node:net";
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -37,6 +38,9 @@ const EXPORT_FORMS = [
   (e) => `export default (input) => ${e};`,
   (e) => `export default function solve(input) { return ${e}; }`,
   (e) => `const solve = (input) => ${e};\nexport { solve };`,
+  (e) => `const f = (input) => ${e};\nexport { f as solve };`,
+  (e) => `function solve(input) { return ${e}; }\nexport default solve;`,
+  (e) => `function solve(input) { return ${e}; }\nexport { solve as default };`,
 ];
 const EQUIVALENTS = {
   "absolute-value": ["Math.abs(input)", "input >= 0 ? input : -input"],
@@ -143,11 +147,86 @@ for (const task of tasks) {
   ];
   for (const bad of badAnswers) assert.ok((await benchmark.score(task, bad)).score <= 0.1);
 }
-const escapeAttempt = { toolLog: [
-  { name: "write_file", args: { path: "src/index.js", content: `export function solve(input) { return input[input.replace("prefix", "con" + "structor")][input.replace("prefix", "con" + "structor")]("ret" + "urn proc" + "ess")(); }` } },
+// Escape table: every payload must be rejected cleanly (score 0, never an
+// exception) and must not execute - the canary global and canary file prove no
+// model text ever reaches a real evaluator.
+const canaryFile = join(tmpdir(), `btw-canary-${process.pid}.txt`);
+const CANARY = "__btwEscaped";
+const ESCAPE_EXPRESSIONS = [
+  'input[String.fromCharCode(99,111,110,115,116,114,117,99,116,111,114)][String.fromCharCode(99,111,110,115,116,114,117,99,116,111,114)]("return process.pid")()',
+  'input["constructor"]["constructor"]("return process.pid")()',
+  'input["con"+"structor"]["con"+"structor"]("return process.pid")()',
+  'input[["con","structor"].join("")][["con","structor"].join("")]("return process.pid")()',
+  'input.__proto__.constructor("return process.pid")()',
+  'input["__proto__"]["constructor"]("return process.pid")()',
+  '({}).constructor("return process.pid")()',
+  'this.process.pid',
+  'globalThis.process.pid',
+  'globalThis["pro"+"cess"].pid',
+  'self.process.pid',
+  'process.pid',
+  'process.env.OPENROUTER_API_KEY',
+  'process.mainModule.require("fs")',
+  'require("node:fs")',
+  `require("node:fs").writeFileSync(${JSON.stringify(canaryFile)},"x")`,
+  'import("node:fs")',
+  'eval("process.pid")',
+  'Function("return process.pid")()',
+  'new Function("return process.pid")()',
+  '(function(){ return process.pid; })()',
+  'input.map.constructor("return process.pid")()',
+  'input.slice.call("x")',
+  'input["slice"]["call"]("x")',
+  'Object.getPrototypeOf(input)',
+  'Object.getOwnPropertyDescriptor(input, "x")',
+  'Object.assign({}, input)',
+  'Math.constructor("return process.pid")()',
+  'input.hasOwnProperty("x")',
+  '[].filter.constructor("return process.pid")()',
+  '"".sub("x")',
+  '`${input.constructor}`',
+  'input?.["constructor"]?.["constructor"]("return process.pid")()',
+  '(async () => process.pid)()',
+  'input.constructor.name',
+  'input.valueOf()',
+  'input.__defineGetter__("x", () => 1)',
+  'Array(4294967295).map(() => 0)',
+  '"a".repeat(1000000000)',
+  'input.match(/(a+)+$/)',
+];
+const ESCAPE_SOURCES = [
+  'export function solve(input) { with(input) { return x; } }',
+  'export function solve(input) { while (true) {} return 1; }',
+  'export function solve(input) { input.x = 1; return input; }',
+  'export function* solve(input) { yield 1; }',
+  'export async function solve(input) { return await input; }',
+  'export function solve(input) { try { return 1; } catch { return 0; } }',
+  'export function solve(input) { delete input.x; return input; }',
+  'import fs from "node:fs"; export function solve(input) { return fs; }',
+  'export function solve(input) { label: return 1; }',
+];
+assert.ok(!existsSync(canaryFile));
+for (const payload of [...ESCAPE_EXPRESSIONS.map((expression) => `export function solve(input) { return ${expression}; }`), ...ESCAPE_SOURCES]) {
+  const graded = await benchmark.score(tasks[0], { toolLog: [
+    { name: "write_file", args: { path: "src/index.js", content: payload } },
+    { name: "run_tests", args: {} },
+  ] });
+  assert.equal(graded.score, 0, `escape payload scored ${graded.score}: ${payload.slice(0, 90)}`);
+  assert.equal(globalThis[CANARY], undefined, `escape payload executed: ${payload.slice(0, 90)}`);
+  assert.ok(!existsSync(canaryFile), `escape payload wrote a file: ${payload.slice(0, 90)}`);
+}
+// process.pid stays unreachable even through the interpreter's own error path.
+const pidProbe = await benchmark.score(tasks[0], { toolLog: [
+  { name: "write_file", args: { path: "src/index.js", content: 'export function solve(input) { return input[String.fromCharCode(112,114,111,99,101,115,115)]; }' } },
   { name: "run_tests", args: {} },
-] };
-assert.equal((await benchmark.score(tasks[0], escapeAttempt)).score, 0);
+] });
+assert.equal(pidProbe.score, 0);
+assert.ok(!String(pidProbe.reason).includes(String(process.pid)), "process.pid leaked into grading output");
+const deepNest = `export function solve(input) { return ${"(".repeat(3000)}1${")".repeat(3000)}; }`;
+assert.equal((await benchmark.score(tasks[0], { toolLog: [
+  { name: "write_file", args: { path: "src/index.js", content: deepNest } },
+  { name: "run_tests", args: {} },
+] })).score, 0, "deeply nested source must be rejected");
 assert.ok(report.rows.some((row) => row.score === 1));
 assert.ok(report.rows.some((row) => row.score === 0));
 assert.ok(tasks.every((task) => !("hiddenCases" in task.metadata)), "task metadata must not ship held-out cases");
@@ -196,12 +275,24 @@ assert.equal(rescored.breakdown.scoredRows, 30, "score output must carry a shiel
 assert.ok(rescored.rows.every((row) => row.details));
 const hiddenList = await execFile(process.execPath, ["dist/cli.js", "list", "--tasks", hiddenFile]);
 assert.ok(hiddenList.stdout.includes("hidden-01-"));
-const { run: runSdk } = await import("../dist/index.js");
+const { run: runSdk, score: scoreSdk } = await import("../dist/index.js");
 const { mockAdapter } = await import("benchmark-core");
 const sdkReport = await runSdk(mockAdapter({ seed: 1, policies: benchmark.definition.mockPolicies }), { tasks: hiddenFile });
 assert.equal(sdkReport.rows.length, 30);
 assert.ok(sdkReport.rows.every((row) => row.taskId.startsWith("hidden-")));
 assert.equal(sdkReport.breakdown.scoredRows, 30, "SDK runs must carry a shield breakdown");
+const hiddenTrace = { toolLog: [
+  { name: "write_file", args: { path: "src/index.js", content: hiddenTasks[0].metadata.reference } },
+  { name: "run_tests", args: {} },
+] };
+assert.equal((await scoreSdk(hiddenTasks[0].id, hiddenTrace, { tasks: hiddenFile, seed: 7 })).score, 1, "SDK score must accept a tasks path");
+assert.equal((await scoreSdk(hiddenTasks[0].id, hiddenTrace, { tasksPath: hiddenFile })).score, 1, "SDK score must accept tasksPath");
+assert.equal((await scoreSdk(hiddenTasks[0].id, hiddenTrace, { tasks: hiddenTasks, seed: 99 })).score, 1, "SDK score must accept a task array");
+const seededLeak = await scoreSdk(hiddenTasks[0].id, { toolLog: [
+  { name: "write_file", args: { path: "src/index.js", content: publicBySlug.get(hiddenTasks[0].id.split("-").slice(2).join("-")).metadata.reference } },
+  { name: "run_tests", args: {} },
+] }, { tasks: hiddenFile, seed: 7 });
+assert.ok(seededLeak.score < 1, "a public reference must not pass hidden held-out cases");
 const { handlerForTasks } = await import("../dist/api.js");
 const hiddenHandler = await handlerForTasks(hiddenFile);
 const apiTasks = await (await hiddenHandler(new Request("http://localhost/v1/tasks"))).json();
