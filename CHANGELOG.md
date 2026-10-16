@@ -4,6 +4,17 @@
 
 Scoring changed. Results produced by 0.1.0 are not comparable with 0.2.0.
 
+### Security
+
+- 0.1.0 evaluated model-written answers in-process through `Function(...)`
+  behind a syntax allow-list. A member name computed at run time (for example
+  `input[String.fromCharCode(...)]` resolving to `constructor`) could escape
+  the allow-list and execute arbitrary code in the benchmark process. 0.2.0
+  replaces the evaluator with a parser plus tree-walking interpreter for the
+  documented grammar: model text never reaches `eval`, `Function`, `vm`,
+  `import()`, or `require`, and property reads resolve only through an
+  explicit `(value type, property)` allow-list.
+
 ### Changed
 
 - Honest fixes written in equivalent syntax now pass. The implementation
@@ -26,4 +37,7 @@ Scoring changed. Results produced by 0.1.0 are not comparable with 0.2.0.
 ### Added
 
 - A `--tasks <path>` option on the CLI, the SDK `run`, and the API so a
-  generated split file can be scored.
+  generated split file can be scored. The SDK `score` accepts `tasks`,
+  `tasksPath`, and `seed` options to mirror a run's split and held-out seed.
+- `export default <name>` and aliased `export { f as solve }` forms, and
+  object literals, in the accepted implementation grammar.

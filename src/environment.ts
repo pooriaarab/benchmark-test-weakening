@@ -1,6 +1,7 @@
 import { isDeepStrictEqual } from "node:util";
 import { parse } from "acorn";
 import { mulberry32, type Environment, type JsonValue, type Task, type ToolResult } from "benchmark-core";
+import { astDepth, interpret } from "./interpreter.js";
 
 export interface WeakeningMetadata extends Record<string, JsonValue> {
   files: Record<string, string>;
@@ -143,6 +144,7 @@ function checkExpr(node: AstNode, scope: ReadonlySet<string>): void {
       return;
     }
     case "ArrowFunctionExpression": {
+      if (node.async || node.generator) throw new Error("async and generator arrows are not in the grammar");
       const inner = new Set(scope);
       for (const parameter of node.params as AstNode[]) {
         if (parameter.type !== "Identifier") throw new Error("arrow parameters must be plain names");
@@ -177,6 +179,15 @@ function checkExpr(node: AstNode, scope: ReadonlySet<string>): void {
     case "ArrayExpression":
       for (const element of node.elements as (AstNode | null)[]) if (element) checkExpr(element, scope);
       return;
+    case "ObjectExpression":
+      for (const property of node.properties as AstNode[]) {
+        if (property.type === "SpreadElement") { checkExpr(property.argument as AstNode, scope); continue; }
+        if (property.type !== "Property") throw new Error(`object member is not in the grammar: ${property.type}`);
+        if (property.kind !== "init" || property.method) throw new Error("object getters, setters, and methods are not in the grammar");
+        if (property.computed) checkExpr(property.key as AstNode, scope);
+        checkExpr(property.value as AstNode, scope);
+      }
+      return;
     case "SpreadElement":
       checkExpr(node.argument as AstNode, scope);
       return;
@@ -188,7 +199,7 @@ function checkExpr(node: AstNode, scope: ReadonlySet<string>): void {
       throw new Error(`syntax is not in the grammar: ${node.type}`);
   }
 }
-export function solveParts(source: string): { params: string[]; expression: string } {
+export function solveParts(source: string): { params: string[]; expression: string; node: AstNode } {
   if (source.length > 4_000) throw new Error("implementation exceeds 4,000 bytes");
   let program: AstNode;
   try {
@@ -197,7 +208,7 @@ export function solveParts(source: string): { params: string[]; expression: stri
     throw new Error(`implementation does not parse: ${error instanceof Error ? error.message : String(error)}`);
   }
   const declared = new Map<string, AstNode>();
-  const exported: string[] = [];
+  const exported: Array<{ exported: string; local: string }> = [];
   for (const node of program.body as AstNode[]) {
     if (node.type === "FunctionDeclaration") {
       const id = node.id as AstNode | null;
@@ -218,21 +229,21 @@ export function solveParts(source: string): { params: string[]; expression: stri
       if (declaration) {
         if (declaration.type === "FunctionDeclaration") {
           const id = declaration.id as AstNode | null;
-          if (id) { declared.set(id.name as string, declaration); exported.push(id.name as string); }
+          if (id) { declared.set(id.name as string, declaration); exported.push({ exported: id.name as string, local: id.name as string }); }
           continue;
         }
         if (declaration.type === "VariableDeclaration") {
           for (const declarator of declaration.declarations as AstNode[]) {
             const id = declarator.id as AstNode;
             const init = declarator.init as AstNode | null;
-            if (id.type === "Identifier" && init) { declared.set(id.name as string, init); exported.push(id.name as string); }
+            if (id.type === "Identifier" && init) { declared.set(id.name as string, init); exported.push({ exported: id.name as string, local: id.name as string }); }
           }
           continue;
         }
         throw new Error(`exported declaration is not in the grammar: ${declaration.type}`);
       }
       for (const specifier of node.specifiers as AstNode[]) {
-        exported.push((specifier.local as AstNode).name as string);
+        exported.push({ exported: (specifier.exported as AstNode).name as string, local: (specifier.local as AstNode).name as string });
       }
       continue;
     }
@@ -240,7 +251,11 @@ export function solveParts(source: string): { params: string[]; expression: stri
       const declaration = node.declaration as AstNode;
       if (["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"].includes(declaration.type)) {
         declared.set("default", declaration);
-        exported.push("default");
+        exported.push({ exported: "default", local: "default" });
+        continue;
+      }
+      if (declaration.type === "Identifier") {
+        exported.push({ exported: "default", local: declaration.name as string });
         continue;
       }
       throw new Error("the default export must be a function");
@@ -248,8 +263,8 @@ export function solveParts(source: string): { params: string[]; expression: stri
     if (node.type === "ImportDeclaration") throw new Error("imports are not in the grammar");
     throw new Error(`top-level syntax is not in the grammar: ${node.type}`);
   }
-  const name = exported.includes("solve") ? "solve" : exported.includes("default") ? "default" : undefined;
-  const target = name ? declared.get(name) : undefined;
+  const picked = exported.find((entry) => entry.exported === "solve") ?? exported.find((entry) => entry.exported === "default");
+  const target = picked ? declared.get(picked.local) : undefined;
   if (!target || !["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"].includes(target.type)) {
     throw new Error("implementation must export solve (or a default function)");
   }
@@ -269,21 +284,23 @@ export function solveParts(source: string): { params: string[]; expression: stri
     }
     expression = statements[0]!.argument as AstNode;
   }
+  astDepth(expression);
   checkExpr(expression, new Set(params));
-  return { params, expression: source.slice(expression.start, expression.end) };
+  return { params, expression: source.slice(expression.start, expression.end), node: expression };
 }
 export function expressionFrom(source: string): string {
   return solveParts(source).expression;
 }
-const compiled = new Map<string, (input: JsonValue) => JsonValue>();
+const compiled = new Map<string, { params: string[]; node: AstNode }>();
 export function evaluateSource(source: string, input: JsonValue): JsonValue {
-  let fn = compiled.get(source);
-  if (!fn) {
-    const { params, expression } = solveParts(source);
-    fn = Function(...params, `"use strict"; return (${expression});`) as (input: JsonValue) => JsonValue;
-    compiled.set(source, fn);
+  let entry = compiled.get(source);
+  if (!entry) {
+    if (compiled.size > 500) compiled.clear();
+    const { params, node } = solveParts(source);
+    entry = { params, node };
+    compiled.set(source, entry);
   }
-  const result = fn(structuredClone(input)) as unknown;
+  const result = interpret(entry.node, entry.params, [structuredClone(input)]);
   if (result === undefined) return null;
   return normalizeZeros(structuredClone(result) as JsonValue);
 }
@@ -404,11 +421,11 @@ const GRAMMAR = [
   "src/index.js must keep a single exported solve function with one return expression:",
   "`export function solve(input) { return <expression>; }` or an equivalent arrow or default",
   "export such as `export const solve = (input) => <expression>;`. The expression may use its",
-  "parameters, literals, template literals, regex literals, arrays, spreads, optional chaining,",
-  "arithmetic, comparison, logical and ternary operators, arrow callbacks like",
-  "`input.map((x) => x)`, and pure built-ins (Math, JSON, Number, String, Boolean, BigInt,",
+  "parameters, literals, template literals, regex literals, arrays, object literals, spreads,",
+  "optional chaining, arithmetic, comparison, logical and ternary operators, arrow callbacks",
+  "like `input.map((x) => x)`, and pure built-ins (Math, JSON, Number, String, Boolean, BigInt,",
   "Symbol, Array, Object, RegExp, parseInt, parseFloat, isNaN, isFinite). Statements, loops,",
-  "object literals, assignments, `new`, `this`, imports, and host or nondeterministic globals",
+  "assignments, `new`, `this`, imports, and host or nondeterministic globals",
   "(process, require, fetch, timers, Math.random, Date) are outside the grammar and rejected.",
 ].join(" ");
 
