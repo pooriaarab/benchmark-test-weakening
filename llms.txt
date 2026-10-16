@@ -25,7 +25,7 @@ Run `npx benchmark-test-weakening run --model offline --provider mock`. The mock
 
 ## Security
 
-Model-written answers are interpreted, never evaluated: acorn parses the source, a whitelist accepts only the documented grammar (no regular expressions - string methods only), and a tree-walking interpreter runs it with allow-listed property access and step, depth, and size budgets. No `eval`, `Function`, `vm`, `import()`, or `require` ever touches model text. Still run untrusted evaluations in a disposable container or VM with no secrets, credentials, or network access; never expose `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, or other credentials to that process. The `mock` provider uses committed fixtures and is safe.
+Model-written answers are interpreted, never evaluated: acorn parses the source, a whitelist accepts only the documented grammar (no regular expressions - string methods only), and a tree-walking interpreter runs it with allow-listed property access and step, depth, and size budgets inside a dedicated child process under a hard wall-clock kill. No `eval`, `Function`, `vm`, `import()`, or `require` ever touches model text. Still run untrusted evaluations in a disposable container or VM with no secrets, credentials, or network access; never expose `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, or other credentials to that process. The `mock` provider uses committed fixtures and is safe.
 
 ## Data and limits
 

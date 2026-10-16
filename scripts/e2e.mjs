@@ -267,16 +267,16 @@ const REGEX_EXPRESSIONS = [
 for (const expression of REGEX_EXPRESSIONS) {
   const started = Date.now();
   let error = "";
-  try { evaluateSource(`export function solve(input) { return ${expression}; }`, "  oak  "); }
+  try { await evaluateSource(`export function solve(input) { return ${expression}; }`, "  oak  "); }
   catch (caught) { error = caught instanceof Error ? caught.message : String(caught); }
   assert.match(error, /regex is not allowed/, `regex payload misnamed: ${expression.slice(0, 80)} -> ${error}`);
   assert.ok(Date.now() - started < 1000, `regex payload was not rejected instantly: ${expression.slice(0, 80)}`);
 }
 
-// Denial-of-service table: every payload must fail cleanly inside the worker's
-// wall-clock budget (2 s per evaluation, 10 s per task) and must never hang or
-// crash the parent. A trivial evaluation after each payload proves the parent
-// stayed responsive while the worker was killed and respawned.
+// Denial-of-service table: every payload must fail cleanly inside the child
+// process wall-clock budget (2 s per evaluation, 10 s per task) and must never
+// hang or crash the parent. A trivial evaluation after each payload proves the
+// parent stayed responsive while the evaluator process was killed and respawned.
 const DOS_EXPRESSIONS = [
   // Forged budgets and internal-function reach.
   "Object.values(Array.from)",
@@ -322,11 +322,11 @@ const aliveProbe = "export function solve(input) { return input + 1; }";
 for (const expression of DOS_EXPRESSIONS) {
   const started = Date.now();
   let failed = false;
-  try { evaluateSource(`export function solve(input) { return ${expression}; }`, 1); } catch { failed = true; }
+  try { await evaluateSource(`export function solve(input) { return ${expression}; }`, 1); } catch { failed = true; }
   const elapsed = Date.now() - started;
   assert.ok(failed, `DoS payload did not fail cleanly: ${expression.slice(0, 80)}`);
   assert.ok(elapsed < 15_000, `DoS payload ran ${elapsed}ms: ${expression.slice(0, 80)}`);
-  assert.equal(evaluateSource(aliveProbe, 1), 2, "parent process is not responsive after a DoS payload");
+  assert.equal(await evaluateSource(aliveProbe, 1), 2, "parent process is not responsive after a DoS payload");
 }
 // The same payloads score 0 through the full grading path within budget.
 for (const expression of [
@@ -347,14 +347,45 @@ assert.equal((await benchmark.score(tasks[0], { toolLog: [
   { name: "write_file", args: { path: "src/index.js", content: tasks[0].metadata.reference } },
   { name: "run_tests", args: {} },
 ] })).score, 1, "grader is not responsive after the DoS table");
+
+// A wedged evaluation - model code the event loop cannot interrupt, like a
+// backtracking regex - must be SIGKILLed with its process: the task fails
+// cleanly, no mutants are credited as killed, the parent's CPU returns to
+// idle, and the parent process can still exit. The spin hook is injected
+// through BTW_EVAL_TEST_HOOK and busy-loops inside the eval child; model text
+// can never reach it.
+process.env.BTW_EVAL_TEST_HOOK = "spin";
+const spinStart = Date.now();
+let spinError = "";
+try { await evaluateSource(aliveProbe, 1); } catch (caught) { spinError = caught instanceof Error ? caught.message : String(caught); }
+assert.match(spinError, /wall-clock|stopped/, `wedged evaluation failed with the wrong error: ${spinError}`);
+assert.ok(Date.now() - spinStart < 10_000, "wedged evaluation was not killed");
+const stalledScore = await benchmark.score(tasks[0], { toolLog: [
+  { name: "write_file", args: { path: "src/index.js", content: tasks[0].metadata.reference } },
+  { name: "run_tests", args: {} },
+] });
+assert.equal(stalledScore.score, 0, "a timed-out evaluation must mark the task failed");
+assert.equal(stalledScore.details.evaluationFailed, true, "evaluation failure must be visible in details");
+assert.equal(stalledScore.details.mutantsKilled, 0, "mutants must not count as killed when evaluations fail");
+delete process.env.BTW_EVAL_TEST_HOOK;
+const cpuBefore = process.cpuUsage();
+await new Promise((resolve) => setTimeout(resolve, 3000));
+const cpuAfter = process.cpuUsage();
+const idleCpuMs = (cpuAfter.user + cpuAfter.system - cpuBefore.user - cpuBefore.system) / 1000;
+assert.ok(idleCpuMs < 300, `parent burned ${idleCpuMs.toFixed(0)}ms CPU while idle: a wedged evaluator thread survived`);
+assert.equal(await evaluateSource(aliveProbe, 1), 2, "evaluator did not recover after the wedged job");
+const exitProbe = join(tmpdir(), `btw-exit-${process.pid}.mjs`);
+await writeFile(exitProbe, `process.env.BTW_EVAL_TEST_HOOK = "spin";\nimport { evaluateSource } from ${JSON.stringify(new URL("../dist/index.js", import.meta.url).href)};\ntry { await evaluateSource("export function solve(input) { return input; }", 1); } catch {}\nconsole.log("exit probe done");\n`);
+await execFile(process.execPath, [exitProbe], { timeout: 20_000 });
+
 assert.ok(report.rows.some((row) => row.score === 1));
 assert.ok(report.rows.some((row) => row.score === 0));
 assert.ok(tasks.every((task) => !("hiddenCases" in task.metadata)), "task metadata must not ship held-out cases");
 
-const seedA = heldOutCases(tasks[0], 111);
+const seedA = await heldOutCases(tasks[0], 111);
 assert.ok(seedA.length > 0, "held-out derivation produced no cases");
-assert.deepEqual(heldOutCases(tasks[0], 111), seedA, "held-out cases must be reproducible for a run seed");
-assert.notDeepEqual(heldOutCases(tasks[0], 222), seedA, "held-out cases must change with a private run seed");
+assert.deepEqual(await heldOutCases(tasks[0], 111), seedA, "held-out cases must be reproducible for a run seed");
+assert.notDeepEqual(await heldOutCases(tasks[0], 222), seedA, "held-out cases must change with a private run seed");
 
 const hiddenDir = await mkdtemp(join(tmpdir(), "btw-hidden-"));
 const hiddenFile = join(hiddenDir, "tasks.jsonl");
@@ -440,6 +471,39 @@ try {
   assert.equal((await get("/v1/provenance")).response.status, 200);
   const entry = (await get("/v1/index-entry")).value; assert.equal(entry.task_count, 30); assert.equal(entry.saturation, "unknown");
 } finally { if (server.exitCode === null) { server.kill("SIGTERM"); await once(server, "exit"); } }
+
+// Event-loop isolation: while a hostile answer wedges the evaluator, the API
+// must keep serving. BTW_EVAL_TEST_HOOK makes every evaluation busy-loop until
+// the wall-clock SIGKILL; a concurrent /health ping measures the stall.
+const probe2 = createNetServer();
+await new Promise((resolve) => probe2.listen(0, "127.0.0.1", resolve));
+const address2 = probe2.address(); assert.ok(address2 && typeof address2 === "object");
+await new Promise((resolve) => probe2.close(resolve));
+const stallServer = spawn(process.execPath, ["dist/cli.js", "serve", String(address2.port)], {
+  stdio: ["ignore", "pipe", "pipe"],
+  env: { ...process.env, BTW_EVAL_TEST_HOOK: "spin" },
+});
+const stallBase = `http://127.0.0.1:${address2.port}`;
+try {
+  for (let attempt = 0; attempt < 100; attempt++) { try { await fetch(`${stallBase}/health`); break; } catch { await new Promise((resolve) => setTimeout(resolve, 20)); } }
+  const scoreRequest = fetch(`${stallBase}/v1/score`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ taskId: report.rows[0].taskId, submission: report.rows[0].submission }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  const pingStart = Date.now();
+  const ping = await fetch(`${stallBase}/health`, { signal: AbortSignal.timeout(10_000) });
+  const stallMs = Date.now() - pingStart;
+  assert.equal(ping.status, 200);
+  assert.ok(stallMs < 200, `event loop stalled ${stallMs}ms during a hostile evaluation`);
+  const stalled = await scoreRequest;
+  assert.equal(stalled.status, 200);
+  const stalledBody = await stalled.json();
+  assert.equal(stalledBody.score, 0, "a wedged API evaluation must fail the task");
+  assert.equal(stalledBody.details.evaluationFailed, true);
+  assert.equal(stalledBody.details.mutantsKilled, 0, "timed-out evaluations must not credit mutant kills");
+} finally { if (stallServer.exitCode === null) { stallServer.kill("SIGTERM"); await once(stallServer, "exit"); } }
 
 const transport = new StdioClientTransport({ command: process.execPath, args: ["dist/cli.js", "mcp"], cwd: process.cwd(), stderr: "pipe" });
 const client = new Client({ name: "benchmark-test-weakening-e2e", version: "0.1.0" });

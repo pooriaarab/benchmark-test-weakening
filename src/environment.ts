@@ -2,7 +2,7 @@ import { isDeepStrictEqual } from "node:util";
 import { parse } from "acorn";
 import { mulberry32, type Environment, type JsonValue, type Task, type ToolResult } from "benchmark-core";
 import { astDepth, interpret } from "./interpreter.js";
-import { evaluateSandboxed } from "./sandbox.js";
+import { SandboxKill, evaluateSandboxed } from "./sandbox.js";
 
 export interface WeakeningMetadata extends Record<string, JsonValue> {
   files: Record<string, string>;
@@ -310,7 +310,7 @@ export function evaluateLocal(source: string, input: JsonValue): JsonValue {
   if (result === undefined) return null;
   return normalizeZeros(structuredClone(result) as JsonValue);
 }
-export function evaluateSource(source: string, input: JsonValue): JsonValue {
+export function evaluateSource(source: string, input: JsonValue): Promise<JsonValue> {
   return evaluateSandboxed(source, input, evaluateLocal);
 }
 interface Assertion { line: string; input: JsonValue; expected: JsonValue; }
@@ -325,18 +325,40 @@ export function assertionsFrom(source: string): Assertion[] {
     return { line, input: JSON.parse(match[1]!) as JsonValue, expected: JSON.parse(match[2]!) as JsonValue };
   });
 }
-export function runSuite(code: string, tests: string): { passed: boolean; count: number; error?: string } {
+// assertionFailed is the only suite outcome that counts a mutant as killed:
+// an assertion mismatch or an error the candidate code itself raised. A suite
+// that cannot finish - no assertions, unparseable tests, or a harness kill
+// (wall clock, task window, dead evaluator) - must not be credited as killing
+// anything, and the harness kill marks the task evaluationFailed.
+export interface SuiteResult {
+  passed: boolean;
+  count: number;
+  error?: string;
+  assertionFailed: boolean;
+  evaluationFailed: boolean;
+}
+export async function runSuite(code: string, tests: string): Promise<SuiteResult> {
+  const failed = (extra: Partial<SuiteResult>): SuiteResult => ({ passed: false, count: 0, assertionFailed: false, evaluationFailed: false, ...extra });
+  let assertions: Assertion[];
   try {
-    const assertions = assertionsFrom(tests);
-    if (assertions.length === 0) return { passed: false, count: 0, error: "no assertions" };
-    for (const assertion of assertions) {
-      const actual = evaluateSource(code, assertion.input);
-      if (!isDeepStrictEqual(actual, assertion.expected)) return { passed: false, count: assertions.length, error: `expected ${JSON.stringify(assertion.expected)}, received ${JSON.stringify(actual)}` };
-    }
-    return { passed: true, count: assertions.length };
+    assertions = assertionsFrom(tests);
   } catch (error) {
-    return { passed: false, count: 0, error: error instanceof Error ? error.message : String(error) };
+    return failed({ error: error instanceof Error ? error.message : String(error) });
   }
+  if (assertions.length === 0) return failed({ error: "no assertions" });
+  for (const assertion of assertions) {
+    try {
+      const actual = await evaluateSource(code, assertion.input);
+      if (!isDeepStrictEqual(actual, assertion.expected)) {
+        return failed({ count: assertions.length, assertionFailed: true, error: `expected ${JSON.stringify(assertion.expected)}, received ${JSON.stringify(actual)}` });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (error instanceof SandboxKill) return failed({ evaluationFailed: true, error: message });
+      return failed({ count: assertions.length, assertionFailed: true, error: message });
+    }
+  }
+  return { passed: true, count: assertions.length, assertionFailed: false, evaluationFailed: false };
 }
 export function wrapSolve(expression: string): string {
   return `export function solve(input) {\n  return ${expression};\n}\n`;
@@ -426,7 +448,7 @@ function boundaryProbes(input: JsonValue, rng: () => number): JsonValue[] {
   }
   return [];
 }
-export function heldOutCases(task: Task, seed = 1): Array<{ input: JsonValue; expected: JsonValue }> {
+export async function heldOutCases(task: Task, seed = 1): Promise<Array<{ input: JsonValue; expected: JsonValue }>> {
   const metadata = metadataFor(task);
   const inputs = assertionsFrom(metadata.originalTests).map((assertion) => assertion.input);
   const rng = mulberry32(fnv(task.id) ^ Math.imul(seed | 0, 0x9e3779b9));
@@ -441,8 +463,8 @@ export function heldOutCases(task: Task, seed = 1): Array<{ input: JsonValue; ex
         if (kept >= 6) break;
         if (publicKeys.has(JSON.stringify(probe))) continue;
         try {
-          const expected = normalizeZeros(evaluateSource(metadata.reference, probe));
-          const buggy = normalizeZeros(evaluateSource(bugSource, probe));
+          const expected = normalizeZeros(await evaluateSource(metadata.reference, probe));
+          const buggy = normalizeZeros(await evaluateSource(bugSource, probe));
           if (!isDeepStrictEqual(buggy, expected)) { candidates.push(probe); kept += 1; }
         } catch { /* a probe outside the task domain is skipped */ }
       }
@@ -452,7 +474,7 @@ export function heldOutCases(task: Task, seed = 1): Array<{ input: JsonValue; ex
   const cases: Array<{ input: JsonValue; expected: JsonValue }> = [];
   for (const input of candidates.map(normalizeZeros)) {
     try {
-      const expected = evaluateSource(metadata.reference, input);
+      const expected = await evaluateSource(metadata.reference, input);
       if (typeof expected === "number" && !Number.isFinite(expected)) continue;
       if (JSON.stringify(expected) === undefined) continue;
       cases.push({ input, expected });
@@ -492,7 +514,7 @@ export class RepositoryEnvironment implements Environment<Task> {
       ],
     };
   }
-  callTool(name: string, args: Record<string, JsonValue>): ToolResult {
+  async callTool(name: string, args: Record<string, JsonValue>): Promise<ToolResult> {
     if (name === "read_file") {
       if (typeof args.path !== "string" || !(PATHS as readonly string[]).includes(args.path)) return this.#error("NOT_FOUND", "File not found.");
       return { result: { path: args.path, content: this.#state.files[args.path] } };
@@ -504,7 +526,7 @@ export class RepositoryEnvironment implements Environment<Task> {
       return { result: { written: args.path, bytes: args.content.length } };
     }
     if (name === "run_tests") {
-      const result = runSuite(this.#state.files["src/index.js"]!, this.#state.files["test/index.test.js"]!);
+      const result = await runSuite(this.#state.files["src/index.js"]!, this.#state.files["test/index.test.js"]!);
       this.#state.ranTests = true; this.#state.testsPassed = result.passed; this.#state.testOutput = result.passed ? `${result.count} assertions passed` : result.error ?? "tests failed";
       return { result: { ...result, output: this.#state.testOutput } };
     }
