@@ -34,6 +34,15 @@ Scoring changed. Results produced by 0.1.0 are not comparable with 0.2.0.
 - A suite whose evaluation fails or times out no longer counts mutants as
   killed: only a real assertion failure is a kill, and the task is marked
   failed with an `evaluationFailed` detail instead of a phantom shield.
+- Concurrent scoring is isolated. The single shared evaluator and
+  process-global task window let hostile `/v1/score` answers corrupt honest
+  requests scored at the same time. Evaluations now run in a small pool of
+  child processes, each task's window is carried by the request's async
+  context, and only the time a job holds an evaluator is charged - queue wait
+  no longer burns a task's budget. Children run under a 256 MB heap cap and
+  are SIGKILLed if the parent exits or takes SIGINT/SIGTERM mid-evaluation.
+  The `BTW_EVAL_TEST_HOOK` test knob is gone from shipped code; the E2E
+  injects its fixture child through `configureEvaluator` instead.
 
 ### Changed
 

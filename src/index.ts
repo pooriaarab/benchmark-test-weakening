@@ -2,7 +2,9 @@ import { run as runBenchmark, type ModelAdapter, type RunOptions, type Task, typ
 import { benchmark, loadTasksFrom, withTaskList, withTasks } from "./benchmark.js";
 import { enrichReport } from "./report.js";
 export { benchmark, loadTasksFrom, withTaskList, withTasks };
-export { evaluateSource, heldOutCases } from "./environment.js";
+export { evaluateLocal, evaluateSource, heldOutCases } from "./environment.js";
+export { configureEvaluator } from "./sandbox.js";
+export type { EvaluatorOptions } from "./sandbox.js";
 export { breakdownFromDetails, breakdownLines, enrichReport, rescoreReport } from "./report.js";
 export type { EnrichedReport, ShieldBreakdown } from "./report.js";
 export async function run(adapter: ModelAdapter, options?: RunOptions & { tasks?: string | readonly Task[] }) {
