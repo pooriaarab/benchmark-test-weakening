@@ -24,7 +24,7 @@ assert.ok(report.rows.every((row) => row.details && typeof row.details.shieldRat
 const textRun = await execFile(process.execPath, ["dist/cli.js", "run", "--model", "offline", "--provider", "mock"], { maxBuffer: 1_000_000 });
 assert.match(textRun.stdout, /Shield breakdown: mean ratio/);
 
-const { benchmark, heldOutCases } = await import("../dist/index.js");
+const { benchmark, evaluateSource, heldOutCases } = await import("../dist/index.js");
 const tasks = await benchmark.listTasks();
 assert.ok(tasks.every((task) => new Set(task.metadata.mutants).size >= 5), "each task needs at least five distinct mutants");
 
@@ -234,6 +234,86 @@ assert.equal((await benchmark.score(tasks[0], { toolLog: [
   { name: "write_file", args: { path: "src/index.js", content: deepNest } },
   { name: "run_tests", args: {} },
 ] })).score, 0, "deeply nested source must be rejected");
+
+// Denial-of-service table: every payload must fail cleanly inside the worker's
+// wall-clock budget (2 s per evaluation, 10 s per task) and must never hang or
+// crash the parent. A trivial evaluation after each payload proves the parent
+// stayed responsive while the worker was killed and respawned.
+const Q32 = "a?".repeat(32);
+const DOS_EXPRESSIONS = [
+  // Catastrophic regex shapes: rejected statically or killed by the wall clock.
+  '/a*a*a*b/.test("a".repeat(600))',
+  '/.*.*.*.*.*x/.test("abcabcabc")',
+  '"aaa".replace(/a*a*a*a*b/, "x")',
+  '"aaab".split(/a*b*c*d/)',
+  '/^a+$|b+$/.test("a".repeat(400))',
+  '/^a+.*b+$/.test("aab")',
+  '/^(a+)+$/.test("a".repeat(30))',
+  '/^([a-z]+)*$/.test("a".repeat(25))',
+  '/^\\w+\\s*\\w*$/.test("x".repeat(900))',
+  '"a".repeat(6000).replace(/a/, "x")',
+  '/^a$/.test("a".repeat(6000))',
+  '"a".repeat(6000).split(/,/)',
+  `("a".repeat(40) + "b").split(/${Q32}x/)`,
+  `("a".repeat(40) + "b").replace(/${Q32}x/, "y")`,
+  'Array.from({ length: 99999 }).reduce((sum) => sum + "x", "")',
+  // Forged budgets and internal-function reach.
+  "Object.values(Array.from)",
+  "Object.values(Array.from)[2]({ steps: 1e18 }, [[1, 2, 3], (x) => x])",
+  "Object.keys(Array.isArray)",
+  "Object.entries(Object.fromEntries)",
+  "Object.values(Math.max)",
+  'Object.hasOwn(Array.of, "call")',
+  "Object.keys((x) => x)",
+  "Object.entries(/x/)",
+  // BigInt is outside the grammar.
+  'BigInt("9".repeat(150000)) ** 900n',
+  "2n ** 9999999n",
+  "BigInt(2) ** BigInt(64)",
+  // Resource caps: huge arrays, huge strings, nested loops, recursion.
+  "Array(1e9)",
+  "Array.from({ length: 1e9 })",
+  "Array.from({ length: 100001 }, (x) => x)",
+  '"x".repeat(1e9)',
+  '"x".repeat(199999) + "y".repeat(199999)',
+  '"ab".padStart(1e9)',
+  '"x".repeat(199999).split("").map((c) => c + c)',
+  'Array.from({ length: 9999 }).reduce((s) => s + s, "x".repeat(64))',
+  "Array.from({ length: 200 }).map(() => Array.from({ length: 99999 }))",
+  "(f => f(f))(f => f(f))",
+  '[..."x".repeat(199999), ..."y".repeat(199999)]',
+];
+assert.ok(DOS_EXPRESSIONS.length >= 30, "DoS table needs at least 30 payloads");
+const dosStart = Date.now();
+const aliveProbe = "export function solve(input) { return input + 1; }";
+for (const expression of DOS_EXPRESSIONS) {
+  const started = Date.now();
+  let failed = false;
+  try { evaluateSource(`export function solve(input) { return ${expression}; }`, 1); } catch { failed = true; }
+  const elapsed = Date.now() - started;
+  assert.ok(failed, `DoS payload did not fail cleanly: ${expression.slice(0, 80)}`);
+  assert.ok(elapsed < 15_000, `DoS payload ran ${elapsed}ms: ${expression.slice(0, 80)}`);
+  assert.equal(evaluateSource(aliveProbe, 1), 2, "parent process is not responsive after a DoS payload");
+}
+// The same payloads score 0 through the full grading path within budget.
+for (const expression of [
+  `("a".repeat(40) + "b").split(/${Q32}x/)`,
+  "Object.values(Array.from)[2]({ steps: 1e18 }, [[1, 2, 3], (x) => x])",
+  'BigInt("9".repeat(150000)) ** 900n',
+]) {
+  const started = Date.now();
+  const graded = await benchmark.score(tasks[0], { toolLog: [
+    { name: "write_file", args: { path: "src/index.js", content: `export function solve(input) { return ${expression}; }` } },
+    { name: "run_tests", args: {} },
+  ] });
+  assert.equal(graded.score, 0, `DoS payload scored ${graded.score}: ${expression.slice(0, 80)}`);
+  assert.ok(Date.now() - started < 15_000, `DoS payload held grading for ${Date.now() - started}ms`);
+}
+assert.ok(Date.now() - dosStart < 60_000, `DoS table took ${Date.now() - dosStart}ms`);
+assert.equal((await benchmark.score(tasks[0], { toolLog: [
+  { name: "write_file", args: { path: "src/index.js", content: tasks[0].metadata.reference } },
+  { name: "run_tests", args: {} },
+] })).score, 1, "grader is not responsive after the DoS table");
 assert.ok(report.rows.some((row) => row.score === 1));
 assert.ok(report.rows.some((row) => row.score === 0));
 assert.ok(tasks.every((task) => !("hiddenCases" in task.metadata)), "task metadata must not ship held-out cases");

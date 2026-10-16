@@ -19,26 +19,53 @@ const MAX_OUTPUT = 100_000;
 const MAX_STRING = 200_000;
 const MAX_ARRAY = 100_000;
 const MAX_REGEX_SOURCE = 300;
+const MAX_REGEX_INPUT = 5_000;
 
-interface Ctx {
-  steps: number;
+// Ctx, Closure, and Builtin are real classes whose internals live in private
+// fields. A model-built `{ steps: 1e18 }` or `{ kind: "builtin", call: f }` is
+// plain data: it is never a trusted callable and never a valid budget, and
+// Object.keys/values/entries on an instance expose nothing.
+export class Ctx {
+  steps = STEP_BUDGET;
 }
-interface Closure {
-  kind: "closure";
-  params: string[];
-  body: Ast;
-  bodyIsExpression: boolean;
-  scope: Scope;
+export class Closure {
+  readonly #params: readonly string[];
+  readonly #body: Ast;
+  readonly #bodyIsExpression: boolean;
+  readonly #scope: Scope;
+  constructor(params: readonly string[], body: Ast, bodyIsExpression: boolean, scope: Scope) {
+    this.#params = params;
+    this.#body = body;
+    this.#bodyIsExpression = bodyIsExpression;
+    this.#scope = scope;
+  }
+  call(ctx: Ctx, args: unknown[]): unknown {
+    if (!(ctx instanceof Ctx)) throw forbidden("internal evaluation context required");
+    const inner = new Scope(this.#scope);
+    this.#params.forEach((name, index) => inner.set(name, args[index]));
+    if (this.#bodyIsExpression) return evaluate(ctx, inner, this.#body);
+    const ret = (this.#body.body as Ast[])[0]?.argument as Ast | undefined;
+    return ret ? evaluate(ctx, inner, ret) : undefined;
+  }
 }
-interface Builtin {
-  kind: "builtin";
-  name: string;
-  call: (ctx: Ctx, args: unknown[]) => unknown;
+export class Builtin {
+  readonly #name: string;
+  readonly #call: (ctx: Ctx, args: unknown[]) => unknown;
+  constructor(name: string, call: (ctx: Ctx, args: unknown[]) => unknown) {
+    this.#name = name;
+    this.#call = call;
+  }
+  get name(): string {
+    return this.#name;
+  }
+  call(ctx: Ctx, args: unknown[]): unknown {
+    if (!(ctx instanceof Ctx)) throw forbidden("internal evaluation context required");
+    return this.#call(ctx, args);
+  }
 }
 type Callable = Closure | Builtin;
 const isCallable = (value: unknown): value is Callable =>
-  typeof value === "object" && value !== null &&
-  ((value as Callable).kind === "closure" || (value as Callable).kind === "builtin");
+  value instanceof Closure || value instanceof Builtin;
 
 class Scope {
   #vars = new Map<string, unknown>();
@@ -80,10 +107,23 @@ const MATH = freeze(Object.fromEntries(
     .map((key) => [key, (Math as unknown as Record<string, unknown>)[key]]),
 ));
 const JSON_NS = freeze({ parse: JSON.parse, stringify: JSON.stringify });
-const OBJECT_NS = freeze(Object.fromEntries(
-  "entries fromEntries hasOwn is keys values".split(" ")
-    .map((key) => [key, (Object as unknown as Record<string, unknown>)[key]]),
-));
+// Object.* helpers refuse callables and functions outright: reading keys or
+// values of a builtin used to leak the internal `call` slot, which a forged
+// `{ steps: 1e18 }` context then drove past the step budget.
+const objectInspection = (fn: (value: never) => unknown) => (value: unknown) => {
+  if (isCallable(value) || typeof value === "function" || value instanceof RegExp) {
+    throw forbidden("Object helpers are not in the grammar for this value");
+  }
+  return fn(value as never);
+};
+const OBJECT_NS = freeze({
+  entries: objectInspection(Object.entries as (value: never) => unknown),
+  fromEntries: objectInspection(Object.fromEntries as (value: never) => unknown),
+  hasOwn: objectInspection(Object.hasOwn as (value: never) => unknown),
+  is: Object.is as (value: never) => unknown,
+  keys: objectInspection(Object.keys as (value: never) => unknown),
+  values: objectInspection(Object.values as (value: never) => unknown),
+});
 const NUMBER_NS = freeze(Object.fromEntries(
   "EPSILON MAX_SAFE_INTEGER MAX_VALUE MIN_SAFE_INTEGER MIN_VALUE NEGATIVE_INFINITY NaN POSITIVE_INFINITY isFinite isInteger isNaN isSafeInteger parseFloat parseInt".split(" ")
     .map((key) => [key, (Number as unknown as Record<string, unknown>)[key]]),
@@ -130,7 +170,7 @@ const BUILTIN_NS: Record<string, Record<string, unknown>> = {
 const isIndex = (key: string): boolean => /^(?:0|[1-9]\d*)$/.test(key) && Number(key) < 2 ** 32 - 1;
 
 function builtin(name: string, call: (ctx: Ctx, args: unknown[]) => unknown): Builtin {
-  return { kind: "builtin", name, call };
+  return new Builtin(name, call);
 }
 function guardResult(value: unknown): unknown {
   if (typeof value === "string" && value.length > MAX_STRING) throw forbidden("string result exceeds the size limit");
@@ -142,11 +182,19 @@ function guardResult(value: unknown): unknown {
 function method(name: string, receiver: unknown): Builtin {
   return builtin(name, (ctx, args) => {
     step(ctx);
+    if (receiver instanceof RegExp && String(args[0] ?? "").length > MAX_REGEX_INPUT) {
+      throw forbidden("regex input exceeds the size limit");
+    }
     if (typeof receiver === "string" && (name === "repeat" || name === "padStart" || name === "padEnd")) {
       const fill = String(args[1] ?? " ");
       if ((Number(args[0]) || 0) * Math.max(1, fill.length) + receiver.length > MAX_STRING) {
         throw forbidden("string result exceeds the size limit");
       }
+    }
+    if (typeof receiver === "string" && receiver.length > MAX_REGEX_INPUT
+      && (name === "replace" || name === "replaceAll" || name === "split")
+      && args.some((arg) => arg instanceof RegExp)) {
+      throw forbidden("regex input exceeds the size limit");
     }
     const fn = (receiver as Record<string, unknown>)[name] as (...a: unknown[]) => unknown;
     const mapped = args.map((arg) => (isCallable(arg) ? (...a: unknown[]) => callValue(ctx, arg, a) : arg));
@@ -180,7 +228,7 @@ function getProperty(ctx: Ctx, object: unknown, key: unknown): unknown {
   if (typeof object === "number") return pick("Number", NUMBER_METHODS);
   if (object instanceof RegExp) return pick("RegExp", REGEXP_METHODS);
   if (isCallable(object)) {
-    const ns = object.kind === "builtin" ? BUILTIN_NS[object.name] ?? EMPTY_NS : EMPTY_NS;
+    const ns = object instanceof Builtin ? BUILTIN_NS[object.name] ?? EMPTY_NS : EMPTY_NS;
     if (Object.hasOwn(ns, name)) return (ns as Record<string, unknown>)[name];
     throw forbidden(`property is not in the grammar: ${name}`);
   }
@@ -200,7 +248,10 @@ function checkRegex(source: string, flags: string): RegExp {
   if (source.length > MAX_REGEX_SOURCE) throw forbidden("regex source exceeds the size limit");
   if (!/^[dgimsuvy]*$/.test(flags)) throw forbidden(`regex flag is not in the grammar: ${flags}`);
   const stripped = source.replace(/\\./g, "..").replace(/\[[^\]]*\]/g, "[]");
-  if (/\\[1-9]/.test(source) || /\(\?/.test(stripped) || /\)[+*?{]/.test(stripped)) {
+  // Two or more unbounded quantifiers is the catastrophic-backtracking shape;
+  // the wall-clock kill in the sandbox still bounds whatever slips through.
+  const unbounded = (stripped.match(/[*+]|\{\d+,\}/g) ?? []).length;
+  if (/\\[1-9]/.test(source) || /\(\?/.test(stripped) || /\)[+*?{]/.test(stripped) || unbounded >= 2) {
     throw forbidden("regex is outside the safe subset");
   }
   try {
@@ -213,7 +264,7 @@ function checkRegex(source: string, flags: string): RegExp {
 const INSTANCEOF: Record<string, (value: unknown) => boolean> = {
   Array: Array.isArray, RegExp: (value) => value instanceof RegExp,
   String: (value) => typeof value === "string", Number: (value) => typeof value === "number",
-  Boolean: (value) => typeof value === "boolean", BigInt: (value) => typeof value === "bigint",
+  Boolean: (value) => typeof value === "boolean",
   Symbol: (value) => typeof value === "symbol",
 };
 
@@ -224,7 +275,6 @@ const GLOBAL_SCOPE = new Scope();
     Infinity, NaN, undefined, Math: MATH, JSON: JSON_NS, Object: OBJECT_NS,
     Number: builtin("Number", coerce(Number)), String: builtin("String", coerce(String)),
     Boolean: builtin("Boolean", coerce(Boolean)),
-    BigInt: builtin("BigInt", (_ctx, args) => BigInt(args[0] as never)),
     Symbol: builtin("Symbol", (_ctx, args) => Symbol(args[0] as string | undefined)),
     Array: builtin("Array", (_ctx, args) => {
       if (args.length === 1 && typeof args[0] === "number" && args[0] > MAX_ARRAY) {
@@ -283,12 +333,7 @@ function callValue(ctx: Ctx, callee: unknown, args: unknown[]): unknown {
     }
     throw forbidden("only grammar functions can be called");
   }
-  if (callee.kind === "builtin") return callee.call(ctx, args);
-  const inner = new Scope(callee.scope);
-  callee.params.forEach((name, index) => inner.set(name, args[index]));
-  if (callee.bodyIsExpression) return evaluate(ctx, inner, callee.body);
-  const ret = (callee.body.body as Ast[])[0]?.argument as Ast | undefined;
-  return ret ? evaluate(ctx, inner, ret) : undefined;
+  return callee.call(ctx, args);
 }
 
 function spreadItems(ctx: Ctx, scope: Scope, nodes: readonly (Ast | null)[], into: unknown[]): void {
@@ -314,7 +359,7 @@ function evaluate(ctx: Ctx, scope: Scope, node: Ast): unknown {
           const regex = node.regex as { pattern: string; flags: string };
           return checkRegex(regex.pattern, regex.flags);
         }
-        if (typeof node.bigint === "string") return BigInt(node.bigint);
+        if (typeof node.bigint === "string") throw forbidden("bigint literals are not in the grammar");
         return node.value;
       }
       case "Identifier":
@@ -368,7 +413,7 @@ function evaluate(ctx: Ctx, scope: Scope, node: Ast): unknown {
         }
         if (op === "instanceof") {
           if (right === OBJECT_NS) return typeof left === "object" && left !== null;
-          const test = isCallable(right) && right.kind === "builtin" ? INSTANCEOF[right.name] : undefined;
+          const test = right instanceof Builtin ? INSTANCEOF[right.name] : undefined;
           if (test) return test(left);
           throw forbidden("instanceof needs a grammar constructor on the right");
         }
@@ -403,7 +448,7 @@ function evaluate(ctx: Ctx, scope: Scope, node: Ast): unknown {
       case "ArrowFunctionExpression": {
         const params = (node.params as Ast[]).map((param) => param.name as string);
         const body = node.body as Ast;
-        return { kind: "closure", params, body, bodyIsExpression: body.type !== "BlockStatement", scope } satisfies Closure;
+        return new Closure(params, body, body.type !== "BlockStatement", scope);
       }
       case "ArrayExpression": {
         const items: unknown[] = [];
@@ -481,7 +526,7 @@ function assertJson(value: unknown, depth = 0): void {
 
 export function interpret(expression: Ast, params: readonly string[], args: readonly unknown[]): unknown {
   astDepth(expression);
-  const ctx: Ctx = { steps: STEP_BUDGET };
+  const ctx = new Ctx();
   const scope = new Scope(GLOBAL_SCOPE);
   params.forEach((name, index) => scope.set(name, args[index]));
   const result = evaluate(ctx, scope, expression);

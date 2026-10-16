@@ -59,7 +59,13 @@ function evaluate(expression, input) {
 function source(expression) { return `export function solve(input) {\n  return ${expression};\n}\n`; }
 function tests(cases, expression) {
   const lines = ['import { solve } from "../src/index.js";', ""];
-  for (const input of cases) lines.push(`assert.deepEqual(solve(${JSON.stringify(input)}), ${JSON.stringify(evaluate(expression, input))});`);
+  const seen = new Set();
+  for (const input of cases) {
+    const line = `assert.deepEqual(solve(${JSON.stringify(input)}), ${JSON.stringify(evaluate(expression, input))});`;
+    if (seen.has(line)) continue;
+    seen.add(line);
+    lines.push(line);
+  }
   return `${lines.join("\n")}\n`;
 }
 function random(seedValue) {
