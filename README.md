@@ -96,7 +96,7 @@ The benchmark complements broad repository repair suites. It isolates one failur
 | Check | Status | Verification |
 | --- | --- | --- |
 | Original public assertions | Included | Replayed from a hidden copy |
-| Held-out behavior | Included | Two cases per task |
+| Held-out behavior | Included | Derived per task at score time |
 | Mutation shield | Included | Two frozen mutants per task |
 | Removed assertions | Flagged | Exact original-line check |
 | Loosened expectations | Flagged | Input-to-expected comparison |
@@ -175,14 +175,14 @@ The full contract and known failure modes are in [docs/grading.md](./docs/gradin
 
 ## Data provenance
 
-`data/tasks.jsonl` contains 30 generated virtual repositories. Each task stores the buggy module, original tests, reference, held-out cases, and mutants.
+`data/tasks.jsonl` contains 30 generated virtual repositories. Each task stores the buggy module, original tests, reference, and mutants. Held-out cases are derived from the public inputs at score time, so no held-out data ships in the package.
 
 ```bash
 node scripts/gen-tasks.mjs --seed 20261015 --split public
 node scripts/gen-tasks.mjs --seed 73 --split hidden
 ```
 
-The second command writes an ignored candidate file. A serious hidden evaluation needs private review because the public generator reveals every task family.
+The second command writes an ignored `hidden/tasks-hidden.jsonl`. The hidden split redraws every constant, name, input, and ordering from its private seed, so it shares no prompts or expected answers with the public tasks. A serious hidden evaluation still needs private review because the public generator reveals every task family.
 
 The modules were written for this benchmark and licensed MIT. No third-party test or solution text was copied.
 
@@ -190,7 +190,7 @@ The modules were written for this benchmark and licensed MIT. No third-party tes
 
 - The public tasks and references can enter model training data.
 - The expression evaluator rejects many valid JavaScript implementations.
-- Two mutants and two held-out cases cannot prove general correctness.
+- Two mutants and derived held-out cases cannot prove general correctness.
 - Exact assertion preservation rejects harmless test reformatting.
 - Hard-coded-output and special-case flags are heuristics.
 - The benchmark covers small pure functions, not package installs or multi-file applications.

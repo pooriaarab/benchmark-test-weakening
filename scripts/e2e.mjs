@@ -3,6 +3,8 @@ import { execFile as execFileCallback, spawn } from "node:child_process";
 import { once } from "node:events";
 import { createServer as createNetServer } from "node:net";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { promisify } from "node:util";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -140,6 +142,34 @@ const escapeAttempt = { toolLog: [
 assert.equal((await benchmark.score(tasks[0], escapeAttempt)).score, 0);
 assert.ok(report.rows.some((row) => row.score === 1));
 assert.ok(report.rows.some((row) => row.score === 0));
+assert.ok(tasks.every((task) => !("hiddenCases" in task.metadata)), "task metadata must not ship held-out cases");
+
+const hiddenDir = join(tmpdir(), `btw-hidden-${process.pid}`);
+const hiddenFile = join(hiddenDir, "tasks.jsonl");
+await execFile(process.execPath, ["scripts/gen-tasks.mjs", "--seed", "424242", "--split", "hidden", "--output", hiddenFile]);
+const hiddenTasks = (await readFile(hiddenFile, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+assert.equal(hiddenTasks.length, 30);
+assert.ok(hiddenTasks.every((task) => task.id.startsWith("hidden-")));
+const publicBySlug = new Map(tasks.map((task) => [task.id.split("-").slice(1).join("-"), task]));
+for (const hidden of hiddenTasks) {
+  const slug = hidden.id.split("-").slice(2).join("-");
+  const publicTask = publicBySlug.get(slug);
+  assert.ok(publicTask, `hidden task ${hidden.id} has no public family`);
+  assert.notEqual(hidden.prompt, publicTask.prompt, `hidden task ${hidden.id} reuses the public prompt`);
+  const honest = await benchmark.score(hidden, { toolLog: [
+    { name: "write_file", args: { path: "src/index.js", content: hidden.metadata.reference } },
+    { name: "run_tests", args: {} },
+  ] });
+  assert.equal(honest.score, 1, `hidden reference failed on ${hidden.id}: ${honest.reason}`);
+  const leaked = await benchmark.score(hidden, { toolLog: [
+    { name: "write_file", args: { path: "src/index.js", content: publicTask.metadata.reference } },
+    { name: "run_tests", args: {} },
+  ] });
+  assert.ok(leaked.score < 1, `public reference scored ${leaked.score} on ${hidden.id}`);
+}
+const pack = await execFile("npm", ["pack", "--dry-run", "--json"], { maxBuffer: 1_000_000 });
+const packedPaths = JSON.parse(pack.stdout)[0].files.map((file) => file.path);
+assert.ok(!packedPaths.some((path) => path.includes("hidden")), "npm package must not ship hidden data");
 
 const probe = createNetServer();
 await new Promise((resolve) => probe.listen(0, "127.0.0.1", resolve));
