@@ -1,8 +1,12 @@
-import { run as runBenchmark, type ModelAdapter, type RunOptions, type Trace } from "benchmark-core";
-import { benchmark } from "./benchmark.js";
-export { benchmark };
+import { run as runBenchmark, type ModelAdapter, type RunOptions, type Task, type Trace } from "benchmark-core";
+import { benchmark, loadTasksFrom, withTaskList, withTasks } from "./benchmark.js";
+export { benchmark, loadTasksFrom, withTaskList, withTasks };
 export { heldOutCases } from "./environment.js";
-export const run = (adapter: ModelAdapter, options?: RunOptions) => runBenchmark(benchmark, adapter, options);
+export async function run(adapter: ModelAdapter, options?: RunOptions & { tasks?: string | readonly Task[] }) {
+  const { tasks, ...rest } = options ?? {};
+  const target = tasks === undefined ? benchmark : typeof tasks === "string" ? await withTasks(tasks) : withTaskList(tasks);
+  return runBenchmark(target, adapter, rest);
+}
 export async function score(taskId: string, submission: Trace) {
   const task = await benchmark.getTask(taskId); if (!task) throw new Error(`Task not found: ${taskId}`);
   return benchmark.score(task, submission);

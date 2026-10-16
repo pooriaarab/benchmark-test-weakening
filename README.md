@@ -127,14 +127,15 @@ The E2E gate runs all 30 tasks through good and adversarial traces. The heuristi
 import { benchmark, run, score } from "benchmark-test-weakening";
 ```
 
-`run(adapter, options)` evaluates every task. `score(taskId, trace)` grades one recorded trace without a model call.
+`run(adapter, options)` evaluates every task; pass `{ tasks: "path/to/tasks.jsonl" }` or a task array in options to run a different split. `score(taskId, trace)` grades one recorded trace without a model call. `withTasks(path)` returns a benchmark bound to a JSONL file, and `handlerForTasks(path)` from `benchmark-test-weakening/api` does the same for the fetch handler.
 
 ## CLI
 
-The CLI commands are `list`, `show`, `run`, `score`, `card`, `provenance`, `index-entry`, `serve`, and `mcp`.
+The CLI commands are `list`, `show`, `run`, `score`, `card`, `provenance`, `index-entry`, `serve`, and `mcp`. Every command accepts `--tasks <path>` to read a different task JSONL, such as a privately generated hidden split.
 
 ```bash
 npx benchmark-test-weakening show 01-has-prefix --json
+npx benchmark-test-weakening run --tasks hidden/tasks-hidden.jsonl --model offline --provider mock
 npx benchmark-test-weakening provenance
 npx benchmark-test-weakening card report.json card.svg
 ```
