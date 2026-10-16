@@ -14,6 +14,7 @@ export const EVAL_TIMEOUT_MS = 2_000;
 export const TASK_EVAL_WINDOW_MS = 10_000;
 const EVALUATOR_POOL_SIZE = 4;
 const EVALUATOR_MEMORY_MB = 256;
+const MAX_PENDING_EVALUATIONS = 1024;
 const REQ_CAP = 64 * 1024;
 
 // Thrown only when the harness around the candidate evaluation fails - the
@@ -46,6 +47,7 @@ export interface EvaluatorOptions {
   poolSize?: number;
   memoryMb?: number;
   windowMs?: number;
+  maxPending?: number;
 }
 let overrides: EvaluatorOptions = {};
 
@@ -202,6 +204,12 @@ export function evaluateSandboxed(
   }
   if (JSON.stringify({ s: source, i: input ?? null }).length > REQ_CAP) {
     return Promise.reject(new SandboxKill("evaluation request exceeds the size limit"));
+  }
+  // A job with no free evaluator waits in a shared queue. The queue is
+  // bounded: under a sustained flood a late request fails fast instead of
+  // accumulating unbounded pending work behind the hostile jobs ahead of it.
+  if (queue.length >= (overrides.maxPending ?? MAX_PENDING_EVALUATIONS)) {
+    return Promise.reject(new SandboxKill("evaluation queue is full"));
   }
   // Runtimes without child processes (for example edge isolates) still get the
   // in-process caps; the wall-clock kill needs process support.

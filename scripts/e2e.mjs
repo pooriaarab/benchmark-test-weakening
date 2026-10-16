@@ -403,6 +403,17 @@ for (let attempt = 0; attempt < 30 && childAlive; attempt++) {
   await new Promise((resolve) => setTimeout(resolve, 100));
 }
 assert.ok(!childAlive, `evaluator ${wedgedPid} survived its parent's exit`);
+// The shared queue is bounded: with one evaluator wedged and a three-deep
+// pending cap, the next job is turned away instead of piling up behind the
+// flood, and the queued jobs still finish once a child frees.
+const restoreCap = configureEvaluator({ entry: wedgeChildPath, poolSize: 1, maxPending: 3 });
+const wedgedJob = evaluateSource(markerSource, 1);
+wedgedJob.catch(() => {});
+const queuedJobs = [evaluateSource(aliveProbe, 1), evaluateSource(aliveProbe, 1), evaluateSource(aliveProbe, 1)];
+await assert.rejects(evaluateSource(aliveProbe, 1), /queue is full/, "a job past the pending cap must be turned away");
+const queuedResults = await Promise.all([wedgedJob.catch(() => "wedged"), ...queuedJobs]);
+assert.deepEqual(queuedResults.slice(1), [2, 2, 2], "queued jobs must complete after the wedged child is replaced");
+restoreCap();
 // The pool recovers on the real evaluator, and a memory-hungry payload dies
 // under the child's 256 MB heap cap instead of growing without bound.
 restoreDefault();

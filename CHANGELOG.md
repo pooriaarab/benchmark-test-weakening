@@ -41,6 +41,8 @@ Scoring changed. Results produced by 0.1.0 are not comparable with 0.2.0.
   context, and only the time a job holds an evaluator is charged - queue wait
   no longer burns a task's budget. Children run under a 256 MB heap cap and
   are SIGKILLed if the parent exits or takes SIGINT/SIGTERM mid-evaluation.
+  The shared job queue is bounded, so a sustained flood of hostile requests
+  is turned away fast instead of piling up pending evaluations.
   The `BTW_EVAL_TEST_HOOK` test knob is gone from shipped code; the E2E
   injects its fixture child through `configureEvaluator` instead.
 
