@@ -175,7 +175,7 @@ The full contract and known failure modes are in [docs/grading.md](./docs/gradin
 
 ## Data provenance
 
-`data/tasks.jsonl` contains 30 generated virtual repositories. Each task stores the buggy module, original tests, reference, and mutants. Held-out cases are derived from the public inputs at score time, so no held-out data ships in the package.
+`data/tasks.jsonl` contains 30 generated virtual repositories. Each task stores the buggy module, original tests, reference, and mutants. Held-out cases are derived at score time from the public inputs and the run seed, so no held-out data ships in the package; pass a private `--seed` when the evaluation must stay unreplayable.
 
 ```bash
 node scripts/gen-tasks.mjs --seed 20261015 --split public

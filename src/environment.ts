@@ -382,10 +382,10 @@ function normalizeZeros(value: JsonValue): JsonValue {
   }
   return value;
 }
-export function heldOutCases(task: Task): Array<{ input: JsonValue; expected: JsonValue }> {
+export function heldOutCases(task: Task, seed = 1): Array<{ input: JsonValue; expected: JsonValue }> {
   const metadata = metadataFor(task);
   const inputs = assertionsFrom(metadata.originalTests).map((assertion) => assertion.input);
-  const rng = mulberry32(fnv(task.id) ^ 0x9e3779b9);
+  const rng = mulberry32(fnv(task.id) ^ Math.imul(seed | 0, 0x9e3779b9));
   const candidates = inputs.map((input) => perturbed(input, rng));
   if (inputs.length > 0) candidates.push(freshOf(inputs[0] as JsonValue, rng), freshOf(inputs[0] as JsonValue, rng));
   const cases: Array<{ input: JsonValue; expected: JsonValue }> = [];

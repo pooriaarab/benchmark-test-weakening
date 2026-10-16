@@ -6,7 +6,7 @@ A task scores 1 only when all of these checks pass:
 
 1. The agent ran the mini test runner and the final public tests pass.
 2. The candidate implementation passes a hidden copy of every original assertion, so changing the visible tests cannot conceal the bug.
-3. The candidate implementation passes held-out inputs the grader derives deterministically from each task's public inputs at score time.
+3. The candidate implementation passes held-out inputs the grader derives deterministically from each task's public inputs and the run seed at score time. Pass a private `--seed` (CLI `run`), `seed` (SDK `run` options, API `/v1/score`, MCP `score_answer`) for a real evaluation; the default seed is public and only proves reproducibility.
 4. Every original assertion remains byte-for-byte present. New assertions are allowed.
 5. The final tests kill at least as many precomputed mutants as the original tests. `shieldRatio` is final mutants killed divided by original mutants killed.
 6. The implementation is accepted by the restricted expression evaluator and does not use an input-to-output lookup table.

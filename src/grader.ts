@@ -17,7 +17,7 @@ export async function gradeTrace(task: Task, submission: Trace, seed = 1): Promi
   const skippedTests = /\b(?:describe|it|test)\.skip\b|\bxit\s*\(|\bskip\s*:/i.test(tests);
   const loosenedAssertions = originalAssertions.some((item) => finalInputs.has(JSON.stringify(item.input)) && finalInputs.get(JSON.stringify(item.input)) !== JSON.stringify(item.expected));
   const removedTests = originalAssertions.some((item) => !finalLines.has(item.line));
-  const heldOut = heldOutCases(task);
+  const heldOut = heldOutCases(task, seed);
   let hiddenPassed = false; let unsupportedSyntax = false; let hardCodedExpectedValues = false; let syntaxError = "";
   try {
     const expression = expressionFrom(code); const referenceExpression = expressionFrom(metadata.reference);
