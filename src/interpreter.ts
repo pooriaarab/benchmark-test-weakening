@@ -1,7 +1,7 @@
-// Tree-walking interpreter for the documented answer grammar. Model-written
-// source is parsed by acorn and whitelisted by checkExpr, then evaluated here
-// node by node. No model text ever reaches eval, Function, vm, import(), or
-// require, and property reads resolve only through explicit allow-lists.
+// Tree-walking interpreter for the documented answer grammar: model source is
+// parsed by acorn, whitelisted by checkExpr, and evaluated node by node. No
+// model text reaches eval, Function, vm, import(), or require, and property
+// reads resolve only through explicit allow-lists.
 
 export interface Ast {
   type: string;
@@ -65,18 +65,12 @@ function step(ctx: Ctx, cost = 1): void {
 // Anything else - constructor, __proto__, prototype, or a computed name outside
 // the list - is a clean forbidden error, so a member name assembled at run time
 // (String.fromCharCode tricks) cannot escape.
-const STRING_METHODS = new Set([
-  "at", "charAt", "charCodeAt", "codePointAt", "concat", "endsWith", "includes",
-  "indexOf", "lastIndexOf", "padEnd", "padStart", "repeat", "replace",
-  "replaceAll", "slice", "split", "startsWith", "substring", "toLowerCase",
-  "toString", "toUpperCase", "trim", "trimEnd", "trimStart",
-]);
-const ARRAY_METHODS = new Set([
-  "at", "concat", "every", "filter", "find", "findIndex", "findLast", "flat",
-  "flatMap", "forEach", "includes", "indexOf", "join", "lastIndexOf", "map",
-  "reduce", "reduceRight", "reverse", "slice", "some", "sort", "toReversed",
-  "toSorted", "toSpliced", "with",
-]);
+const STRING_METHODS = new Set(
+  "at charAt charCodeAt codePointAt concat endsWith includes indexOf lastIndexOf padEnd padStart repeat replace replaceAll slice split startsWith substring toLowerCase toString toUpperCase trim trimEnd trimStart".split(" "),
+);
+const ARRAY_METHODS = new Set(
+  "at concat every filter find findIndex findLast flat flatMap forEach includes indexOf join lastIndexOf map reduce reduceRight reverse slice some sort toReversed toSorted toSpliced with".split(" "),
+);
 const NUMBER_METHODS = new Set(["toExponential", "toFixed", "toPrecision", "toString"]);
 const REGEXP_METHODS = new Set(["exec", "test"]);
 
@@ -86,22 +80,16 @@ const MATH = freeze(Object.fromEntries(
     .map((key) => [key, (Math as unknown as Record<string, unknown>)[key]]),
 ));
 const JSON_NS = freeze({ parse: JSON.parse, stringify: JSON.stringify });
-const OBJECT_NS = freeze({
-  entries: Object.entries, fromEntries: Object.fromEntries, hasOwn: Object.hasOwn,
-  is: Object.is, keys: Object.keys, values: Object.values,
-});
-const NUMBER_NS = freeze({
-  EPSILON: Number.EPSILON, MAX_SAFE_INTEGER: Number.MAX_SAFE_INTEGER,
-  MAX_VALUE: Number.MAX_VALUE, MIN_SAFE_INTEGER: Number.MIN_SAFE_INTEGER,
-  MIN_VALUE: Number.MIN_VALUE, NEGATIVE_INFINITY: Number.NEGATIVE_INFINITY,
-  NaN: Number.NaN, POSITIVE_INFINITY: Number.POSITIVE_INFINITY,
-  isFinite: Number.isFinite, isInteger: Number.isInteger, isNaN: Number.isNaN,
-  isSafeInteger: Number.isSafeInteger, parseFloat: Number.parseFloat,
-  parseInt: Number.parseInt,
-});
-// Array.from and Array.of are builtins, not raw natives: an array-like length is
-// capped before any loop sees it, so Array.from({ length: 1e9 }) fails fast
-// instead of allocating outside the step budget.
+const OBJECT_NS = freeze(Object.fromEntries(
+  "entries fromEntries hasOwn is keys values".split(" ")
+    .map((key) => [key, (Object as unknown as Record<string, unknown>)[key]]),
+));
+const NUMBER_NS = freeze(Object.fromEntries(
+  "EPSILON MAX_SAFE_INTEGER MAX_VALUE MIN_SAFE_INTEGER MIN_VALUE NEGATIVE_INFINITY NaN POSITIVE_INFINITY isFinite isInteger isNaN isSafeInteger parseFloat parseInt".split(" ")
+    .map((key) => [key, (Number as unknown as Record<string, unknown>)[key]]),
+));
+// Array.from and Array.of are builtins, not raw natives: an array-like length
+// is capped before any loop sees it, so Array.from({ length: 1e9 }) fails fast.
 const ARRAY_NS = freeze({
   from: builtin("Array.from", (ctx, args) => {
     const source = args[0];
@@ -134,8 +122,7 @@ const ARRAY_NS = freeze({
 });
 const EMPTY_NS = freeze({});
 // Member reads on callable globals resolve through frozen namespaces only, so
-// String.fromCharCode and friends stay unreachable even when the property name
-// is assembled at run time.
+// String.fromCharCode stays unreachable even when the name is built at run time.
 const BUILTIN_NS: Record<string, Record<string, unknown>> = {
   Array: ARRAY_NS, Number: NUMBER_NS, Object: OBJECT_NS,
 };
@@ -224,12 +211,9 @@ function checkRegex(source: string, flags: string): RegExp {
 }
 
 const INSTANCEOF: Record<string, (value: unknown) => boolean> = {
-  Array: (value) => Array.isArray(value),
-  RegExp: (value) => value instanceof RegExp,
-  String: (value) => typeof value === "string",
-  Number: (value) => typeof value === "number",
-  Boolean: (value) => typeof value === "boolean",
-  BigInt: (value) => typeof value === "bigint",
+  Array: Array.isArray, RegExp: (value) => value instanceof RegExp,
+  String: (value) => typeof value === "string", Number: (value) => typeof value === "number",
+  Boolean: (value) => typeof value === "boolean", BigInt: (value) => typeof value === "bigint",
   Symbol: (value) => typeof value === "symbol",
 };
 
@@ -237,10 +221,8 @@ const GLOBAL_SCOPE = new Scope();
 {
   const coerce = (fn: (arg?: unknown) => unknown) => (_ctx: Ctx, args: unknown[]) => (args.length ? fn(args[0]) : fn());
   const globals: Record<string, unknown> = {
-    Infinity, NaN, undefined,
-    Math: MATH, JSON: JSON_NS, Object: OBJECT_NS,
-    Number: builtin("Number", coerce(Number)),
-    String: builtin("String", coerce(String)),
+    Infinity, NaN, undefined, Math: MATH, JSON: JSON_NS, Object: OBJECT_NS,
+    Number: builtin("Number", coerce(Number)), String: builtin("String", coerce(String)),
     Boolean: builtin("Boolean", coerce(Boolean)),
     BigInt: builtin("BigInt", (_ctx, args) => BigInt(args[0] as never)),
     Symbol: builtin("Symbol", (_ctx, args) => Symbol(args[0] as string | undefined)),
@@ -261,29 +243,19 @@ const GLOBAL_SCOPE = new Scope();
   for (const [name, value] of Object.entries(globals)) GLOBAL_SCOPE.set(name, value);
 }
 
-// arithmetic, comparison, and bitwise operators share one table; logical,
-// nullish, in, and instanceof get dedicated handling below.
+// arithmetic, comparison, and bitwise share one table; logical, in, and
+// instanceof get dedicated handling below.
 const BINARY: Record<string, (left: never, right: never) => unknown> = {
-  "+": (left, right) => left + right,
-  "-": (left, right) => left - right,
-  "*": (left, right) => left * right,
-  "/": (left, right) => left / right,
-  "%": (left, right) => left % right,
-  "**": (left, right) => left ** right,
-  "===": (left, right) => left === right,
-  "!==": (left, right) => left !== right,
-  "==": (left, right) => left == right,
-  "!=": (left, right) => left != right,
-  "<": (left, right) => left < right,
-  "<=": (left, right) => left <= right,
-  ">": (left, right) => left > right,
-  ">=": (left, right) => left >= right,
-  "&": (left, right) => left & right,
-  "|": (left, right) => left | right,
-  "^": (left, right) => left ^ right,
-  "<<": (left, right) => left << right,
-  ">>": (left, right) => left >> right,
-  ">>>": (left, right) => left >>> right,
+  "+": (left, right) => left + right, "-": (left, right) => left - right,
+  "*": (left, right) => left * right, "/": (left, right) => left / right,
+  "%": (left, right) => left % right, "**": (left, right) => left ** right,
+  "===": (left, right) => left === right, "!==": (left, right) => left !== right,
+  "==": (left, right) => left == right, "!=": (left, right) => left != right,
+  "<": (left, right) => left < right, "<=": (left, right) => left <= right,
+  ">": (left, right) => left > right, ">=": (left, right) => left >= right,
+  "&": (left, right) => left & right, "|": (left, right) => left | right,
+  "^": (left, right) => left ^ right, "<<": (left, right) => left << right,
+  ">>": (left, right) => left >> right, ">>>": (left, right) => left >>> right,
 };
 
 function evalMembers(ctx: Ctx, scope: Scope, node: Ast): [unknown, unknown] {
