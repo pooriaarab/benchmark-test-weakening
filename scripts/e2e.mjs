@@ -126,6 +126,7 @@ for (const task of tasks) {
     ] });
     // is-positive differs from its bug only at the scalar 0, which is a public
     // input: a lookup of public pairs covers it, so that one residual stays 1.
+    // Tracked as issue #26.
     const scalarBoundary = name === "lookup-with-bug" && task.id.endsWith("-is-positive");
     assert.equal(graded.score, scalarBoundary ? 1 : 0, `${name} gamed ${task.id}: ${graded.reason}`);
   }
