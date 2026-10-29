@@ -17,3 +17,12 @@ keywords:
   - llm-evaluation
   - agent-evaluation
   - deterministic-grader
+
+preferred-citation:
+  type: article
+  title: "Test Weakening: Measuring Repair without Eroding Tests"
+  authors:
+    - family-names: Arab
+      given-names: Pooria
+      orcid: "https://orcid.org/0009-0005-9964-6841"
+  url: "https://github.com/pooriaarab/benchmark-test-weakening/tree/main/paper"

@@ -1,0 +1,6 @@
+\begin{figure}[t]\centering
+\begin{tikzpicture}\begin{axis}[ybar,bar width=24pt,ylabel={Task count},xlabel={First public input type},xtick={0,1,2,3},xticklabels={String,Number,Array,Object},ymin=0,ymax=12,nodes near coords]
+\addplot[fill=okblue] table[x=x,y=count,col sep=comma]{generated/coverage.generated.csv};
+\end{axis}\end{tikzpicture}
+\caption{The public corpus covers several input types, with more numeric tasks. Counts describe coverage; they do not establish representative sampling.}
+\label{fig:coverage}\end{figure}

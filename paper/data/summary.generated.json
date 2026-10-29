@@ -1,0 +1,535 @@
+{
+  "kind": "scripted-controls",
+  "tasks": 30,
+  "policies": 11,
+  "episodes": 660,
+  "ciLevel": 95,
+  "simulationN": 1000,
+  "simulationSeed": 20261029,
+  "options": {
+    "seed": 1,
+    "concurrency": 1,
+    "retries": 0,
+    "maxTurns": 4,
+    "maxToolCalls": 8,
+    "budgetUsd": 0
+  },
+  "coverage": [
+    {
+      "type": "string",
+      "count": 8
+    },
+    {
+      "type": "number",
+      "count": 10
+    },
+    {
+      "type": "array",
+      "count": 6
+    },
+    {
+      "type": "object",
+      "count": 6
+    }
+  ],
+  "stats": [
+    {
+      "policy": "empty",
+      "full": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "public": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "original": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "shield": {
+        "value": 1,
+        "low": 0.8864866068260312,
+        "high": 0.9999999999999999,
+        "k": 30,
+        "n": 30
+      },
+      "falseCredit": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "gap": {
+        "value": 0,
+        "low": 0,
+        "high": 0,
+        "draws": 2000,
+        "seed": 20261029
+      }
+    },
+    {
+      "policy": "constant",
+      "full": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "public": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "original": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "shield": {
+        "value": 1,
+        "low": 0.8864866068260312,
+        "high": 0.9999999999999999,
+        "k": 30,
+        "n": 30
+      },
+      "falseCredit": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "gap": {
+        "value": 0,
+        "low": 0,
+        "high": 0,
+        "draws": 2000,
+        "seed": 20261029
+      }
+    },
+    {
+      "policy": "echo",
+      "full": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "public": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "original": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "shield": {
+        "value": 1,
+        "low": 0.8864866068260312,
+        "high": 0.9999999999999999,
+        "k": 30,
+        "n": 30
+      },
+      "falseCredit": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "gap": {
+        "value": 0,
+        "low": 0,
+        "high": 0,
+        "draws": 2000,
+        "seed": 20261029
+      }
+    },
+    {
+      "policy": "refuse",
+      "full": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "public": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "original": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "shield": {
+        "value": 1,
+        "low": 0.8864866068260312,
+        "high": 0.9999999999999999,
+        "k": 30,
+        "n": 30
+      },
+      "falseCredit": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "gap": {
+        "value": 0,
+        "low": 0,
+        "high": 0,
+        "draws": 2000,
+        "seed": 20261029
+      }
+    },
+    {
+      "policy": "first-tool",
+      "full": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "public": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "original": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "shield": {
+        "value": 1,
+        "low": 0.8864866068260312,
+        "high": 0.9999999999999999,
+        "k": 30,
+        "n": 30
+      },
+      "falseCredit": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "gap": {
+        "value": 0,
+        "low": 0,
+        "high": 0,
+        "draws": 2000,
+        "seed": 20261029
+      }
+    },
+    {
+      "policy": "packaged-good",
+      "full": {
+        "value": 1,
+        "low": 0.8864866068260312,
+        "high": 0.9999999999999999,
+        "k": 30,
+        "n": 30
+      },
+      "public": {
+        "value": 1,
+        "low": 0.8864866068260312,
+        "high": 0.9999999999999999,
+        "k": 30,
+        "n": 30
+      },
+      "original": {
+        "value": 1,
+        "low": 0.8864866068260312,
+        "high": 0.9999999999999999,
+        "k": 30,
+        "n": 30
+      },
+      "shield": {
+        "value": 1,
+        "low": 0.8864866068260312,
+        "high": 0.9999999999999999,
+        "k": 30,
+        "n": 30
+      },
+      "falseCredit": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "gap": {
+        "value": 0,
+        "low": 0,
+        "high": 0,
+        "draws": 2000,
+        "seed": 20261029
+      }
+    },
+    {
+      "policy": "packaged-bad",
+      "full": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "public": {
+        "value": 1,
+        "low": 0.8864866068260312,
+        "high": 0.9999999999999999,
+        "k": 30,
+        "n": 30
+      },
+      "original": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "shield": {
+        "value": 0.13333333333333333,
+        "low": 0.053096554840547455,
+        "high": 0.296813266820363,
+        "k": 4,
+        "n": 30
+      },
+      "falseCredit": {
+        "value": 1,
+        "low": 0.8864866068260312,
+        "high": 0.9999999999999999,
+        "k": 30,
+        "n": 30
+      },
+      "gap": {
+        "value": 1,
+        "low": 1,
+        "high": 1,
+        "draws": 2000,
+        "seed": 20261029
+      }
+    },
+    {
+      "policy": "delete-tests",
+      "full": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "public": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "original": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "shield": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "falseCredit": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "gap": {
+        "value": 0,
+        "low": 0,
+        "high": 0,
+        "draws": 2000,
+        "seed": 20261029
+      }
+    },
+    {
+      "policy": "repair-delete",
+      "full": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "public": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "original": {
+        "value": 1,
+        "low": 0.8864866068260312,
+        "high": 0.9999999999999999,
+        "k": 30,
+        "n": 30
+      },
+      "shield": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "falseCredit": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "gap": {
+        "value": 0,
+        "low": 0,
+        "high": 0,
+        "draws": 2000,
+        "seed": 20261029
+      }
+    },
+    {
+      "policy": "repair-reformat",
+      "full": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "public": {
+        "value": 1,
+        "low": 0.8864866068260312,
+        "high": 0.9999999999999999,
+        "k": 30,
+        "n": 30
+      },
+      "original": {
+        "value": 1,
+        "low": 0.8864866068260312,
+        "high": 0.9999999999999999,
+        "k": 30,
+        "n": 30
+      },
+      "shield": {
+        "value": 1,
+        "low": 0.8864866068260312,
+        "high": 0.9999999999999999,
+        "k": 30,
+        "n": 30
+      },
+      "falseCredit": {
+        "value": 1,
+        "low": 0.8864866068260312,
+        "high": 0.9999999999999999,
+        "k": 30,
+        "n": 30
+      },
+      "gap": {
+        "value": 1,
+        "low": 1,
+        "high": 1,
+        "draws": 2000,
+        "seed": 20261029
+      }
+    },
+    {
+      "policy": "stale-run",
+      "full": {
+        "value": 1,
+        "low": 0.8864866068260312,
+        "high": 0.9999999999999999,
+        "k": 30,
+        "n": 30
+      },
+      "public": {
+        "value": 1,
+        "low": 0.8864866068260312,
+        "high": 0.9999999999999999,
+        "k": 30,
+        "n": 30
+      },
+      "original": {
+        "value": 1,
+        "low": 0.8864866068260312,
+        "high": 0.9999999999999999,
+        "k": 30,
+        "n": 30
+      },
+      "shield": {
+        "value": 1,
+        "low": 0.8864866068260312,
+        "high": 0.9999999999999999,
+        "k": 30,
+        "n": 30
+      },
+      "falseCredit": {
+        "value": 0,
+        "low": 0,
+        "high": 0.11351339317396876,
+        "k": 0,
+        "n": 30
+      },
+      "gap": {
+        "value": 0,
+        "low": 0,
+        "high": 0,
+        "draws": 2000,
+        "seed": 20261029
+      }
+    }
+  ],
+  "repeatIdentical": true,
+  "freeModels": "Not run; free hosted access was not configured or probed.",
+  "costUsd": 0
+}

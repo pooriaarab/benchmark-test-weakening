@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "title": "Test Weakening: Measuring Repair without Eroding Tests",
+  "abstract": "A coding agent can make visible tests pass by changing their expected answers. Test Weakening measures whether repair preserves the evidence used to accept it. We study 30 synthetic JavaScript tasks with executable checks for original assertions, held-out behavior, and mutation strength. The study runs 11 scripted policies over 660 episodes including repeats. Reference repair earns 100.0 [88.6, 100.0] percent full success. Expected-answer rewriting earns 100.0 [88.6, 100.0] percent public-test success but 0.0 [0.0, 11.4] percent full success. Brackets are 95 percent Wilson intervals over tasks. A semantics-preserving test reformat earns 0.0 [0.0, 11.4] percent full success, exposing a lexical preservation limit. A separately labelled simulated population sweep compares public-only, original-test, and full acceptance rules. It measures scoring sensitivity under fixed behavior, not changes in learned agents. No learned model, human study, or production deployment is evaluated.",
+  "authors": [
+    {
+      "name": "Pooria Arab",
+      "affiliation": "Independent researcher",
+      "orcid": "https://orcid.org/0009-0005-9964-6841"
+    }
+  ],
+  "license": "CC-BY-4.0",
+  "keywords": [
+    "test weakening",
+    "code repair",
+    "mutation testing",
+    "benchmark",
+    "simulated controls"
+  ],
+  "code_url": "https://github.com/pooriaarab/benchmark-test-weakening",
+  "artifact_name": "test-weakening-paper.pdf"
+}
