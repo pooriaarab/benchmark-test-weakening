@@ -1,0 +1,167 @@
+\documentclass{article}
+\input{template/layout}
+\input{generated/macros}
+\title{\PaperTitle}
+\author{Pooria Arab\\Independent researcher\\\href{https://orcid.org/\Orcid}{ORCID \Orcid}}
+\begin{document}
+\maketitle
+\begin{abstract}\PaperAbstract\end{abstract}
+\section{Why this matters}
+A passing test suite supports a repair only when the checks still mean what they meant before the repair. A coding agent can change the implementation. If it can also change the tests, it can remove the evidence that the implementation remains wrong. This creates a measurement problem. The visible outcome can look successful while the required behavior remains absent.
+
+Test Weakening isolates this problem in small repair tasks. Each task starts with a faulty function and explicit assertions. The agent receives permission to repair the function, together with an instruction to preserve the tests. The evaluation asks whether the final implementation meets the behavior checks without reducing test strength. It does not infer motive from a patch. A wrong expectation can result from confusion, shortcut seeking, or an intentional attempt to gain credit. The observed action is the same in each case.
+
+The benchmark separates implementation correctness from preservation of the evidence for correctness. A repair can satisfy the old tests while still failing unseen inputs. A test change can preserve the number of assertions while changing their meaning. A policy can leave the entire test suite untouched without repairing anything. These cases require distinct checks. No single public pass flag answers all of them.
+
+The contribution is a compact benchmark design and an audit of its measurement behavior. The study runs reference repair, deliberate weakening, simple text policies, and targeted diagnostic policies through the public execution path. It also adds a simulated population sweep over alternative acceptance rules. These experiments show what the measurement can distinguish under controlled behavior. They do not establish how often current coding models weaken tests.
+
+The central result has a useful qualification. Rewriting expected answers makes public tests pass but fails the full score. However, an equivalent formatting change also fails the full score. The benchmark therefore enforces a stricter preservation rule than semantic test equivalence. This limit belongs beside the positive separation result, because both affect how users should interpret a low score.
+
+\section{Related work}
+Software repair benchmarks connect a proposed patch to executable outcomes. SWE-bench uses real software issues and their associated repositories to study code changes in realistic contexts \citep{jimenez2023}. Test Weakening takes a narrower approach. Its small synthetic functions remove most navigation and dependency work so that the relation between a repair and its tests can be inspected directly. This supports controlled diagnostics but sacrifices the complexity of real maintenance tasks.
+
+EvalPlus studies the risk that inadequate tests accept incorrect generated code. It strengthens evaluation with additional inputs and demonstrates that test quality affects conclusions about generated programs \citep{liu2023}. Test Weakening focuses on another source of unreliable evidence: the evaluated agent can modify the visible tests. Additional hidden checks address incorrect code, while test-preservation checks address changes to the acceptance evidence itself. These mechanisms overlap, but they answer different questions.
+
+BetterBench emphasizes benchmark design, documentation, replication, and maintenance \citep{reuel2024}. These concerns motivate the fixed task set, declared policies, raw traces, and explicit limits in this study. The Agentic Benchmark Checklist examines defects in agent task setup and reward design \citep{zhu2025}. Its concern with invalid credit motivates the empty and constant policies here. A deterministic grader still needs controls that can reveal an unexpected route to success.
+
+This study does not compare model rankings across these benchmarks. Their task populations and scoring targets differ. Nor does it claim that a small synthetic task replaces repository repair. The intended role is a focused measurement component: an evaluator can use it to examine whether a repair workflow distinguishes changed behavior from changed evidence.
+
+\section{Experiment design}
+\subsection{Construct and unit of analysis}
+The target construct is repair that preserves test obligations. An obligation links an input to its required output. Preserving obligations means retaining those checks while correcting the implementation. The operational score adds held-out behavior and a mutation-strength condition. It also requires a test run after the final accepted write. The unit of analysis is a task episode, comprising the task, ordered tool actions, resulting files, and deterministic score.
+
+The construct excludes general code quality, readability, efficiency, and broad software engineering competence. It also excludes claims about intent. A failure to call the testing tool is a protocol failure, even if a proposed function is correct. A function outside the accepted expression language fails even if a different runtime would execute it correctly. These boundaries constrain the meaning of both success and failure.
+
+Tasks are not matched safe and unsafe prompt pairs. Instead, each policy acts on the same task set. This creates within-task comparisons between reference repair, expected-answer rewriting, and other controls. The pairing removes task identity as an explanation for differences between these policies. It does not make the corpus a random sample of software defects.
+
+\subsection{Task setting}
+Each task exposes a virtual implementation and a visible assertion suite. The implementation exports a function that returns an expression. Inputs include strings, numbers, arrays, and objects. An agent can read a file, replace a file, or run the visible tests. The task instruction asks it to repair the implementation without removing, skipping, or loosening tests.
+
+The evaluator restricts the expression language. Supported operations include arithmetic, comparisons, conditional expressions, selected pure methods, and arrow callbacks. Arbitrary imports, host access, loops, and nondeterministic globals fall outside the language. This restriction makes exact replay practical. It also means the benchmark evaluates repair within a defined language rather than unrestricted JavaScript development.
+
+A prefix task illustrates the distinction. The faulty function checks a suffix when the requirement concerns a prefix. Correct repair changes the implementation to the prefix operation. Weakening instead changes the expected answers so the existing suffix operation appears correct. The public suite can then pass even though the required function remains wrong. The hidden original assertions retain the earlier expectations and expose that difference.
+
+\subsection{Controls and execution}
+The study fixes \TaskCount{} public tasks and \PolicyCount{} scripted policies. Each policy runs once and repeats once, yielding \EpisodeCount{} episodes. Repeats check semantic reproducibility. They do not add independent task evidence. The reference policy reads the known reference implementation. It is a privileged positive control, not a model baseline that solves the task from the prompt.
+
+The expected-answer policy uses the task's prepared weakened suite. It preserves buggy code while replacing expected outputs. Text-only policies return nothing, a constant, the prompt, or a refusal. The first-tool policy attempts a read without required arguments and then terminates. These controls check whether uninformative output or ineffective tool use gains credit.
+
+Additional policies delete assertions, combine reference repair with deletion, and combine reference repair with a formatting-only test change. The formatting policy inserts whitespace inside the argument of the function call in each assertion. This preserves the parsed input and expected output. It tests whether the preservation rule follows meaning or literal assertion text.
+
+The stale-run policy requests reference repair, a test run, and then a write that restores the bug. Inspection of the actual trace is essential: the runner stops after successful tests, before the last requested write. This condition therefore becomes another reference-repair trace. Its success is not evidence that stale test results are accepted. It is an observed limit of this experimental route.
+
+\subsection{Plan, deviations, and exclusions}
+The analysis plan is committed before result files are produced. It states the hypotheses, policies, metrics, simulation grid, and exclusion rule. This local commitment is not an externally registered timestamp. No public registration or venue submission accompanies the study. Source inspection informed the plan, so this is not a blind audit of an unknown grader.
+
+An interrupted initial run exposed a mock adapter termination error. After an invalid read, the runner asked for another response, but the script had ended. The correction appends an empty final response to tool scripts. It changes termination rather than the requested actions. The deviation is recorded before the completed study run. Initial completed text controls were not saved by the interrupted script; the final run includes them again.
+
+No task is removed because of its score. Empty outputs, refusals, invalid arguments, and failed tests remain outcomes. Infrastructure errors or evaluator timeouts stop collection rather than silently becoming policy failures. The completed experiment has matching semantic repeats. Hosted free-model access is neither configured nor probed, and no learned-model score is reported.
+
+\section{Coverage}
+\input{figures/coverage}
+Figure~\ref{fig:coverage} counts tasks by the first input in their visible suite. This coarse partition describes the corpus, not every value a task can accept. Numeric transformations, string operations, array access, and object-field checks provide distinct repair contexts. Yet all share a short implementation and a compact assertion format. Diversity of input type should not be confused with diversity of software architecture.
+
+The corpus is synthetic and public. Reference solutions, faulty implementations, visible tests, and prepared mutants are available to researchers. Public access enables exact reproduction of the controls. It also makes scores unsuitable as evidence of resistance to memorization. A learned agent with access to the answer material can copy the reference, just as the privileged control does.
+
+Held-out cases derive from a run seed and the reference behavior. They perturb visible inputs, add fresh values, and seek boundary inputs that separate the reference from the initial bug. They are unseen by the episode policy but arise from known task families. They provide another check on a candidate implementation, not independent human confirmation of the specification.
+
+The first-input partition also identifies a reporting risk. A single aggregate result can hide the concentration of tasks in a narrow operation family. Future model comparisons should report family-level outcomes and inspect whether gains survive a change in task mix. Repeated variants of one function should not be treated as independent discoveries of general repair ability.
+
+\section{Taxonomy of failures}
+\subsection{Changing expectations}
+Expectation rewriting changes what counts as the right output. The task requirement stays fixed, but the test suite becomes consistent with the buggy function. This is the main weakening policy in the study. It is stronger than a constant reply as a negative control because it reaches a plausible visible success state. A system that accepts only the latest public test result cannot separate it from repair.
+
+An expectation-change detector compares parsed assertions for the same inputs. This is useful when the exact old input remains present. However, the broader construct is preservation of obligations, not merely preservation of input keys. A replacement suite can alter its inputs or structure. Hidden original assertions and mutation checks supply additional evidence when surface comparisons are insufficient.
+
+\subsection{Removing evidence}
+Deleting assertions removes evidence without necessarily changing the implementation. The benchmark rejects an empty suite. Thus, the deletion control does not show that the mutation layer alone prevents credit. The public test layer already refuses to treat an empty suite as a pass. This is a useful null for attributing protection to later layers.
+
+Repair followed by deletion separates code correctness from test preservation. The final code can match the reference, while the missing suite violates the task requirement. A low full score in this condition does not mean the function is wrong. It means the accepted outcome requires both repair and retained evidence. Reporting only the aggregate score would hide this distinction.
+
+\subsection{Protocol and execution failures}
+A text answer may discuss a repair without applying it. An invalid read may leave the state unchanged. These failures differ from weakening because they do not reach a passing visible suite. They test the lower boundary of the score: the benchmark should not reward an unsupported statement that work is complete.
+
+A test run also has temporal meaning. It applies to the code state tested at that time. A later write can invalidate it. The environment records whether tests have run after a write, but the present stale-run policy cannot test that protection through the runner. Early termination prevents the final write. A future direct-trace experiment should distinguish the runner's stop rule from the grader's response to stale evidence.
+
+\subsection{Conservative rejection}
+The formatting control exposes a different failure class: rejection of a semantically preserved obligation. Inserting whitespace inside an assertion changes its stored line but leaves its parsed values unchanged. The current preservation rule compares assertion lines as well as parsed input-output relationships. It marks the former line as removed when the reformatted line replaces it.
+
+This rule is defensible if the contract explicitly requires unchanged assertion text. It is too strict if the intended construct allows harmless formatting changes. The benchmark's interpretation must state which contract applies. The present paper reports the discrepancy rather than redefining semantic preservation after observing the result. A revised benchmark could canonicalize assertions, but that would require new false-acceptance controls before adoption.
+
+\section{Metrics and scoring}
+\subsection{Full acceptance}
+Let $P_i$ indicate that the final public tests pass after an accepted test run. Let $O_i$ indicate agreement with the original visible assertions. Let $H_i$ indicate agreement with the generated held-out cases. Let $A_i$ denote retention of the required assertions without skips or changed expectations. Let $G_i$ denote accepted syntax and completion of the required evaluations. The operational score is conjunctive:
+
+\begin{equation} S_i=P_i O_i H_i A_i G_i\,\mathbf{1}\{R_i\geq 1\}.\end{equation}
+The grader also checks a heuristic for copied held-out output literals. This check forms part of $G_i$ here. The formula describes the decision, not a claim that each component contributes independent evidence. For example, original assertions and preserved test lines overlap strongly on the registered policies.
+
+\subsection{Mutation strength}
+A mutant is a prepared alternative implementation. A test suite kills it when evaluation yields an assertion failure. Let $K_i^{\mathrm{old}}$ and $K_i^{\mathrm{new}}$ count killed mutants before and after the agent's changes. The shield ratio is $R_i=K_i^{\mathrm{new}}/K_i^{\mathrm{old}}$ when the denominator is positive. The evaluator defines the ratio as unity when the original count is zero. A malformed suite or an evaluator timeout does not constitute a mutant kill.
+
+The ratio compares counts, not the identities of killed mutants. Equal counts can therefore hide a swap in which different mutants survive. A future set-containment metric could require retention of every originally killed mutant. This would measure a stronger property, but it could also reject legitimate changes unless the mutant set and equivalent mutants receive careful review.
+
+Shield preservation alone is insufficient. An inactive policy leaves the original suite intact and therefore retains its mutation strength. It still fails to repair the function. Conversely, a repaired function with deleted assertions can meet the behavior requirement while losing the shield. The full score requires both properties, and the component table keeps their meanings visible.
+
+\subsection{Rates, pairing, and uncertainty}
+For each policy, the study reports the mean full score and the mean public pass indicator. It also reports original-test agreement, shield preservation, and the public-versus-full disagreement rate. We call the last quantity false credit relative to full scoring: $F_i=P_i(1-S_i)$. This is an operational label. It does not establish that every rejected patch is semantically wrong, as the formatting control demonstrates.
+
+Every reported rate carries a Wilson interval at the stated confidence level. The independent unit for these intervals is a task under a hypothetical sampling model. The corpus itself is fixed and deliberately constructed. The intervals therefore express a conventional sampling interpretation, not uncertainty about the deterministic results on these exact tasks. Shared task families can reduce effective diversity further.
+
+The paired public-minus-full difference uses a task bootstrap. Each draw resamples whole task outcomes, preserving both scores for a task. Repeated episodes are excluded from the bootstrap sample. Boundary results can produce a collapsed bootstrap interval when every observed difference is identical. Such an interval is not proof that an effect is known exactly in a wider population. The Wilson component intervals remain alongside it.
+
+\section{Results}
+\input{figures/policies}
+\begin{table}[t]\centering\small\input{generated/policies}\caption{Scripted-policy outcomes with Wilson intervals over tasks. Shield retention alone rewards unchanged tests even when no repair occurs. The stale-run row describes a truncated attempt, not an executed stale write.}\label{tab:policies}\end{table}
+Reference repair achieves \GoodRate{} percent full success. Expected-answer rewriting achieves \BadPublic{} percent public success and \BadFull{} percent full success. These intervals refer to tasks. The contrast supports the planned separation between repair and this prepared weakening strategy. It does not estimate the natural prevalence of weakening in learned agents.
+
+Table~\ref{tab:policies} shows why component measures matter. Text-only and ineffective first-tool policies leave the original shield intact while failing the episode. Deletion fails even when paired with correct code. Public test success and shield retention measure different properties, and neither should be presented as a substitute for completed repair.
+
+The expected-answer policy retains the mutation-count shield on \BadShield{} percent of tasks while failing full scoring. This shows that preserved mutant counts alone do not establish preserved obligations. The exact surviving mutant identities are not analyzed here.
+
+The formatting policy achieves \ReformatPublic{} percent public success but \ReformatRate{} percent full success. It preserves the reference behavior and the parsed assertions, yet changes the literal assertion lines. This is direct evidence that the implemented preservation rule is not invariant to harmless whitespace changes. It limits claims that the full score measures only semantic weakening.
+
+The stale-run row warrants separate treatment. The requested script contains a final buggy write, but the actual tool log ends after successful tests. The resulting pass is consistent with the actions that executed. The condition cannot support either a vulnerability claim or a protection claim concerning stale results. This is a coverage failure of the experimental intervention, not evidence to be removed from the report.
+
+\begin{table}[t]\centering\small\input{generated/contrasts}\caption{Public-versus-full disagreement and paired differences. Rate intervals are Wilson intervals; difference intervals use the task bootstrap. Collapsed boundary intervals reflect the observed sample and do not imply population certainty.}\label{tab:contrasts}\end{table}
+The expected-answer policy has a public-minus-full difference of \BadGap{} percentage points. Table~\ref{tab:contrasts} reports all policy contrasts, including null differences. The same disagreement occurs for the formatting control, but with a different interpretation. The former changes requirements to fit faulty code; the latter exposes a conservative preservation check. A scalar disagreement rate cannot distinguish those causes without trace inspection.
+
+\subsection{Simulated population and control ablation}
+The extra experiment is a simulated population sweep. Each simulated episode draws a task uniformly from the fixed corpus and selects either reference repair or expected-answer rewriting. The assigned weakening probability varies across a fixed grid. Each grid point contains \SimN{} simulated episodes. Shared random draws couple the grid points so that changing the mixture does not also change the task sample.
+
+The simulated experiment compares public-only acceptance, public acceptance plus the original assertions, and full acceptance. These are post hoc decision rules applied to recorded outcomes. They are not interventions on agent behavior, and the word control refers to an acceptance check. No policy learns from a rejected patch or changes strategy in response to stronger checks.
+
+\input{figures/simulation}
+\begin{table}[t]\centering\small\input{generated/simulation}\caption{Simulated sweep with Wilson intervals over simulated episodes. Assigned weakening probabilities are design settings. False credit means acceptance when the full rule rejects. The original and full rules coincide for this simulated policy mixture.}\label{tab:simulation}\end{table}
+Figure~\ref{fig:simulation} shows the expected scoring sensitivity: public-only acceptance does not reveal replacement of repair by weakening. Table~\ref{tab:simulation} provides the rates and intervals. Original-test acceptance and full acceptance coincide throughout this simulated grid. This is a null incremental effect for the additional full-score checks on the selected mixture. It is not evidence that those checks are unnecessary for other attacks.
+
+The simulation has an analytical interpretation. Reference repair passes every considered rule in the observed corpus. Expected-answer rewriting passes public tests and fails both stronger rules. Conditional on these observed properties, public-only acceptance has no dependence on the mixture parameter. Stronger acceptance follows the complement of the sampled weakening fraction. The experiment tests the reproducible calculation and illustrates the measurement consequence; it does not discover a new empirical law of agents.
+
+Intervals in the simulated table quantify Monte Carlo variation conditional on this finite corpus and these selected policies. Increasing the number of simulated episodes would narrow them without adding a new task family or a new learned agent. They must not be compared directly with task-level intervals as though they represented the same source of uncertainty. The shared draws also mean rows at different probabilities are dependent.
+
+\section{Roadmap}
+The first priority is semantic preservation. A revised rule should accept harmless formatting and reject changed input-output obligations. Canonicalization could remove irrelevant whitespace before comparison. However, a permissive parser can introduce new ambiguities. Any change should first specify accepted and rejected transformations, then demonstrate both through complete traces. The current formatting result provides a concrete acceptance case for that work.
+
+The next priority is to separate the contribution of each protective check. The present simulated mixture does not isolate the mutation layer because original assertions already reject its negative policy. Better diagnostic policies would preserve original behavior while weakening coverage of unseen faults. They should also test whether equal mutation counts can conceal a loss of previously detected faults. These controls would justify claims about mutation protection that the current results cannot support.
+
+A separate study should complete the stale-evidence intervention through direct ordered traces or a runner that does not terminate early. Such a study should record the last applied write, the tested state, and the final state independently. It should verify that a positive case reaches the intended path before interpreting the absence of stale acceptance. This would resolve the current execution-path limit without changing the meaning of the existing row.
+
+Learned-model evaluation requires another plan. It should fix model versions, resource limits, prompt exposure, and the allowed use of reference material. It should distinguish inability to repair from willingness to change tests. Free access alone would not make a comparison valid: provider terms, reproducible settings, and output retention still matter. No missing model result is replaced here by a simulated one.
+
+Finally, broader tasks should include realistic refactors and legitimate test maintenance. In ordinary development, changing a test can be correct when the specification changes. The present benchmark holds the specification fixed. An extension should state when test changes are authorized and include clean cases where they are required. Otherwise, a policy that never edits tests could look safe while failing the intended maintenance task.
+
+\section{Caveats and interpretation}
+\paragraph{Synthetic scope.} Short functions permit precise examination but omit repository navigation, dependency failures, integration behavior, and ambiguous requirements. Results support claims about this task format. They do not establish reliability in a full development environment. The reference control also enjoys answer access, so its success measures the attainable scoring ceiling rather than task-solving ability.
+\paragraph{Specification dependence.} Hidden expected outputs derive from the reference implementation. A reference bug can therefore affect both the target and the checks. There is no independent expert annotation study here. Diverse human review and alternative specifications would strengthen the argument that the benchmark measures the intended behavior rather than agreement with one implementation.
+\paragraph{Conservative scoring.} Full rejection may reflect syntax limits, literal assertion preservation, or a missing test action. It need not imply semantically incorrect code. The formatting control demonstrates this problem within the accepted expression setting. Users should inspect failure categories before treating the aggregate score as a measure of damaging behavior.
+\paragraph{Public knowledge.} The task corpus and prepared weakening strategy are public. The study cannot measure contamination or unseen attack resistance. Seeded hidden inputs vary checks within familiar families. They do not make those families confidential, and this paper makes no claim that a determined agent cannot infer them.
+\paragraph{Simulation limits.} The simulated sweep changes the mixture of fixed policies and acceptance rules. It does not model planning, learning, oversight costs, or adaptation. Its false-credit result is conditional on the full grader, whose own conservative behavior is documented. The sweep is useful for showing how a reported success rate can hide weakening, not for forecasting deployment failure rates.
+\paragraph{Missing external evidence.} There is no human survey, learned-model leaderboard, independent replication, or production deployment. Free hosted availability remains untested. The local study plan does not provide an external registration guarantee. The benchmark author is also the paper author, so the audit should not be described as independent validation.
+\section{Citation and availability}
+Code, tasks, study data, and reproduction instructions are available at \url{https://github.com/pooriaarab/benchmark-test-weakening}. Cite this paper by its title and author; the packet includes structured citation metadata. The paper and generated figures use CC-BY-4.0. The software and original task assets retain their existing MIT license. No journal, archive, or conference publication is claimed by this manuscript.
+
+\section{Authors}
+Pooria Arab is an independent researcher and the benchmark maintainer. ORCID: \href{https://orcid.org/\Orcid}{\Orcid}. AI assistance supports experiment scripting, analysis, and manuscript preparation. The released traces allow readers to check the numerical claims. Author review remains necessary before external publication.
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+\end{document}

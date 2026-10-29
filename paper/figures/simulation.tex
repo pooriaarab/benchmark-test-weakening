@@ -1,0 +1,8 @@
+\begin{figure}[t]\centering
+\begin{tikzpicture}\begin{axis}[width=.97\linewidth,ylabel={Simulated episodes accepted (\%)},xlabel={Assigned weakening probability (\%)},ymin=-5,ymax=110,legend style={at={(.5,1.02)},anchor=south,legend columns=3,font=\scriptsize}]
+\addplot[okorange,mark=square*,error bars/.cd,y dir=both,y explicit] table[x=p,y=value,y error minus=lo,y error plus=hi,col sep=comma]{generated/sim-public.generated.csv};\addlegendentry{Public only}
+\addplot[black,mark=o,mark size=4pt,error bars/.cd,y dir=both,y explicit] table[x=p,y=value,y error minus=lo,y error plus=hi,col sep=comma]{generated/sim-original.generated.csv};\addlegendentry{Original added}
+\addplot[okblue,dashed,mark=*,error bars/.cd,y dir=both,y explicit] table[x=p,y=value,y error minus=lo,y error plus=hi,col sep=comma]{generated/sim-full.generated.csv};\addlegendentry{Full}
+\end{axis}\end{tikzpicture}
+\caption{Simulated population sweep: public-only acceptance stays high as weakening replaces repair. Original-test and full controls coincide on this simulated mixture. Wilson intervals cover simulated draws, conditional on the fixed corpus, not learned-agent uncertainty.}
+\label{fig:simulation}\end{figure}

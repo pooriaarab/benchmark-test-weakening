@@ -1,0 +1,7 @@
+\begin{figure}[t]\centering
+\begin{tikzpicture}\begin{axis}[height=6cm,ylabel={Tasks accepted (\%)},ymin=-5,ymax=110,xtick={0,...,10},xticklabels={Empty,Constant,Echo,Refuse,First tool,Reference,Rewrite,Delete,Repair/delete,Reformat,Stale attempt},x tick label style={rotate=45,anchor=east,font=\scriptsize},legend style={at={(.5,1.02)},anchor=south,legend columns=2}]
+\addplot[only marks,mark=square*,okorange,error bars/.cd,y dir=both,y explicit] table[x=x,y=public,y error minus=plo,y error plus=phi,col sep=comma]{generated/policies.generated.csv};\addlegendentry{Public tests}
+\addplot[only marks,mark=*,okblue,error bars/.cd,y dir=both,y explicit] table[x=x,y=full,y error minus=flo,y error plus=fhi,col sep=comma]{generated/policies.generated.csv};\addlegendentry{Full acceptance}
+\end{axis}\end{tikzpicture}
+\caption{Rewriting expectations passes public tests but fails full scoring. Reformatting valid assertions also fails full scoring. The stale attempt stops before its final write. Bars show task-level Wilson intervals; coincident marks overlap.}
+\label{fig:policies}\end{figure}
