@@ -1,0 +1,14 @@
+{
+  "title": "Test Weakening: Measuring Repair without Eroding Tests",
+  "orcid": "https://orcid.org/0009-0005-9964-6841",
+  "keywords": [
+    "test weakening",
+    "code repair",
+    "mutation testing",
+    "benchmark",
+    "simulated controls"
+  ],
+  "code_url": "https://github.com/pooriaarab/benchmark-test-weakening",
+  "artifact_name": "test-weakening-paper.pdf",
+  "source_commit": "64356727d7ec24e610b43411cd38fc9836bbc35e"
+}
