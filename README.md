@@ -1,5 +1,7 @@
 # benchmark-test-weakening
 
+Paper: [10.5281/zenodo.23752433](https://doi.org/10.5281/zenodo.23752433)
+
 [![npm](https://img.shields.io/npm/v/benchmark-test-weakening)](https://www.npmjs.com/package/benchmark-test-weakening) [![downloads](https://img.shields.io/npm/dm/benchmark-test-weakening)](https://www.npmjs.com/package/benchmark-test-weakening) [![license](https://img.shields.io/npm/l/benchmark-test-weakening)](./LICENSE) [![types](https://img.shields.io/badge/TypeScript-types-3178c6)](#sdk)
 
 [AI Benchmark Index](https://private-repo-337e.com/benchmarks/benchmark-test-weakening) · [Quickstart](#run-your-first-benchmark) · [Scoring](#how-scoring-works) · [API](#http-api) · [MCP](#model-context-protocol)
